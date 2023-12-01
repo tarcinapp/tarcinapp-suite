@@ -16,6 +16,7 @@ Furthermore you can:
 * Enable caching
 * Apply rate limiting
 * Use distributed locking during the update operations
+* Enable/disable REST operations
 * Predefine complex queries to allow simpler query strings
 * Predefine sets of data fields for easier querying
 * Configure entity level visibility settings and define default visibility (private, protected, public)
