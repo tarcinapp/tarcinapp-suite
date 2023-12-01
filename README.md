@@ -8,6 +8,7 @@ Tarcinapp Suite is an interconnected microservices family that helps you to crea
 * `PUT` - `api/v1/books/{book-id}`
 * `PATCH` - `api/v1/books/{book-id}`
 * `DELETE` - `api/v1/books/{book-id}`
+  
 Furthermore you can:
 * Require JWT authentication
 * Configure role based access (RBAC)
