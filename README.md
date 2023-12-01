@@ -12,7 +12,7 @@ Tarcinapp Suite is an interconnected microservices family that helps you to crea
 Furthermore you can:
 * Require JWT authentication
 * Configure role based access (RBAC)
-* Configure role based field-level masking
+* Configure field-level operations based on fine-grained user roles
 * Perform JSON schema based validation during the creation and update
 * Enable caching
 * Apply rate limiting
