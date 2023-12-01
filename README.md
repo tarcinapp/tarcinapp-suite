@@ -1,4 +1,4 @@
-Tarcinapp Suite is an interconnected microservices family that helps you to create JSON APIs like these in few clicks:  
+Tarcinapp Suite is an interconnected microservices family that helps you to create JSON APIs easily. 
 * `GET` - `/api/v1/books`
 * `GET` - `/api/v1/books/count`
 * `POST` - `/api/v1/books`
