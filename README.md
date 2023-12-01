@@ -16,11 +16,12 @@ Furthermore you can:
 * Enable caching
 * Apply rate limiting
 * Use distributed locking during the update operations
-* Predefine complex queries to use with allow simpler query strings
+* Predefine complex queries to allow simpler query strings
 * Predefine sets of data fields for easier querying
 * Configure entity level visibility settings and define default visibility (private, protected, public)
 * Prevent user's access each other's data when not explicitly allowed to do
 * Require approval from users with higher roles for created entities
+* Query pagination
 * Mark entities as deleted instead of really deleting them
 * Tag entities
 * Track creation and last update dates
