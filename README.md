@@ -31,7 +31,14 @@ Furthermore you can:
 * Have dashboard for the usage data in Grafana
 # Use Cases
 # Usage
-## Quick Start
+## Getting Start
+Quick Start or configure yourself:
+### Quick Start
+### Configure Your Application
+* Configure Application
+* Choose a Deployment Layout
+* Run the application.
+
 ## Deployment 
 ### Kubernetes
 ### Docker
