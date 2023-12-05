@@ -1,4 +1,4 @@
-Tarcinapp Suite is an interconnected microservices family that helps you to create JSON APIs easily. 
+Tarcinapp Suite is an interconnected microservices family that helps you to create JSON APIs easily. For example: 
 * `GET` - `/api/v1/books`
 * `GET` - `/api/v1/books/count`
 * `POST` - `/api/v1/books`
@@ -7,6 +7,7 @@ Tarcinapp Suite is an interconnected microservices family that helps you to crea
 * `PUT` - `/api/v1/books/{book-id}`
 * `PATCH` - `/api/v1/books/{book-id}`
 * `DELETE` - `/api/v1/books/{book-id}`
+`books` is used as an example. Any endpoint can be defined with it's own custom JSON schema.
   
 Furthermore you can:
 * Require JWT authentication
