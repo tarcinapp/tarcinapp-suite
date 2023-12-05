@@ -30,6 +30,11 @@ Furthermore you can:
 * Monitor request and response payloads
 * Have dashboard for the usage data in Grafana
 # Use Cases
+# Components
+1. entity-persistence-service
+2. entity-persistence-integration
+3. entity-persistence-gateway
+4. entity-persistence-dos-protection
 # Usage
 ## Getting Start
 Quick Start or configure yourself:
