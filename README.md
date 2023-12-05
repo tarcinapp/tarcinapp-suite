@@ -6,7 +6,7 @@ Tarcinapp Suite is an interconnected microservices family that helps you to crea
 * `GET` - `/api/v1/books/{book-id}`
 * `PUT` - `/api/v1/books/{book-id}`
 * `PATCH` - `/api/v1/books/{book-id}`
-* `DELETE` - `/api/v1/books/{book-id}`
+* `DELETE` - `/api/v1/books/{book-id}`  
 `books` is used as an example. Any endpoint can be defined with it's own custom JSON schema.
   
 # Features
