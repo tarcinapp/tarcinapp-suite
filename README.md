@@ -9,7 +9,7 @@ Tarcinapp Suite is an interconnected microservices family that helps you to crea
 * `DELETE` - `/api/v1/books/{book-id}`
 `books` is used as an example. Any endpoint can be defined with it's own custom JSON schema.
   
-Furthermore you can:
+# Features
 * Require JWT authentication
 * Configure role based access (RBAC)
 * Configure field-level operations based on fine-grained user roles
