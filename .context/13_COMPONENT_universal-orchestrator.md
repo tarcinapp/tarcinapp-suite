@@ -124,6 +124,8 @@ src/main/java/io/tarcinapp/orchestrator/
 
 ### Verified Route Counts (from directory listing)
 
+The orchestrator exposes **68 Camel routes** in total: it mirrors all **67 EPS endpoints** (adding a pass-through for `/openapi.json` that EPS itself does not serve) plus a `/system-info` proxy. The **65 domain routes** each have a Pre/Post-processor pair; the 3 system routes (`ping`, `openapi`, `system-info`) pass through without custom processor logic.
+
 | Resource group | Route classes | Processor pairs | Operations covered |
 |:---|:---:|:---:|:---|
 | `entities/` | 16 | 16 | countEntities, findEntities, createEntity, updateEntities, findEntityById, replaceEntityById, updateEntityById, deleteEntityById, createChildEntity, findChildrenByEntityId, findListsByEntityId, findParentsByEntityId, createReactionByEntityId, findReactionsByEntityId, updateReactionsByEntityId, deleteReactionsByEntityId |
@@ -132,7 +134,7 @@ src/main/java/io/tarcinapp/orchestrator/
 | `entityreactions/` | 11 | 11 | countEntityReactions, findEntityReactions, createEntityReaction, updateEntityReactions, findEntityReactionById, replaceEntityReactionById, updateEntityReactionById, deleteEntityReactionById, createChildEntityReaction, findChildrenByEntityReactionId, findParentsByEntityReactionId |
 | `listreactions/` | 11 | 11 | countListReactions, findListReactions, createListReaction, updateListReactions, findListReactionById, replaceListReactionById, updateListReactionById, deleteListReactionById, createChildListReaction, findChildrenByListReactionId, findParentsByListReactionId |
 | `system/` | 3 | — | ping, getOpenApiJson, getSystemInfo |
-| **Total** | **68** | **65** | |
+| **Total (orchestrator routes)** | **68** | **65** | 67 EPS endpoints + 1 openapi pass-through |
 
 ---
 

@@ -48,9 +48,9 @@ Every record is decorated with **managed fields** (underscore-prefixed). See [`0
 
 ---
 
-## Controller Reference (68 endpoints)
+## Controller Reference (67 endpoints)
 
-There are 13 controller source files in [`entity-persistence-service/src/controllers/`](../../entity-persistence-service/src/controllers/).
+There are 12 controller source files with routes in [`entity-persistence-service/src/controllers/`](../../entity-persistence-service/src/controllers/) (plus `index.ts` which is a re-export barrel with no routes of its own).
 
 ### EntityController — 11 routes
 | Method | Path | Description |

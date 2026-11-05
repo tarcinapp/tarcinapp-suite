@@ -128,7 +128,7 @@ Tarcinapp is a comprehensive architectural framework composed of six logical lay
 ### V. Data, Search & Storage Layer *(partially implemented)*
 * **Role:** The Persistence & Retrieval engine. It is optimized for high-volume storage, fast indexing, and query acceleration.
 * **Key Components:**
-    * `entity-persistence-service` ✅ (Domain Agnostic API): The fundamental **Node.js / LoopBack 4** service that handles database operations without enforcing business logic. It exposes **67 REST JSON endpoints** (66 domain endpoints + 1 health check) covering the full spectrum of CRUD and relational operations on Generic Record Types.
+    * `entity-persistence-service` ✅ (Domain Agnostic API): The fundamental **Node.js / LoopBack 4** service that handles database operations without enforcing business logic. It exposes **67 REST JSON endpoints** (65 domain endpoints + 1 health check `/ping` + 1 diagnostics endpoint `/system-info`) covering the full spectrum of CRUD and relational operations on Generic Record Types.
     * `entity-persistence-cache` *(planned)* (Query Accelerator): A specialized performance layer that caches frequently accessed data on Redis to offload the main database.
     * `mongodb` *(infrastructure — deployed MongoDB instance)*: The primary NoSQL Entity Store holding the raw data for the entire system.
     * `entity-search-engine` (Meilisearch) *(infrastructure — deployed Meilisearch instance)*: The dedicated search engine providing high-speed, relevant, and typo-tolerant search results.
@@ -258,27 +258,28 @@ class Client_Lane,IDM_Lane,Gateway_Layer,Orch_Layer,Data_Lane,Event_Layer layer;
 
 ## 3. THE RUNTIME REALITY: API Surface & Topology
 
-When the system boots, the core `entity-persistence-service` exposes exactly **67 REST endpoints** organized across 10 controllers. The **65 domain-facing endpoints** (all except the `/ping` health check) are directly mirrored by the Gateway's **Base Generic** route set. On top of these, the Gateway projects an additional **73 Kind Alias routes** (domain-specific) plus **2 utility routes** (`/ping`, `/openapi.json|yaml`), totalling **140 gateway routes** in a fully configured deployment. When the Gateway is configured with Kind Alias paths (domain projection active), the effective client-visible API surface further expands.
+When the system boots, the core `entity-persistence-service` exposes exactly **67 REST endpoints** across 11 active route controllers (plus one barrel `index.ts` with no routes). The **65 domain-facing endpoints** (everything except `/ping` and `/system-info`) are directly mirrored by the Gateway's **Base Generic** route set. The Gateway then adds 73 Kind Alias routes (domain projections) plus 2 utility routes (`/ping`, `/openapi.json|yaml`), totalling **140 gateway routes** in a fully configured deployment.
 
 ### A. The Raw EPS Endpoint Topology
 
-The 67 EPS endpoints are served by specialized Controllers following a strict mathematical pattern based on the record type's nature.
+The 67 EPS endpoints are served by specialized controllers following a strict pattern based on record type.
 
-| Controller | Endpoint Count | Route Breakdown |
+| Controller | Endpoints | Routes |
 | :--- | :---: | :--- |
 | **EntityController** | **11** | `POST /entities`, `GET /entities`, `PATCH /entities`, `GET /entities/count`, `GET /entities/{id}`, `PUT /entities/{id}`, `PATCH /entities/{id}`, `DELETE /entities/{id}`, `GET /entities/{id}/parents`, `GET /entities/{id}/children`, `POST /entities/{id}/children` |
-| **ListController** | **11** | Same 11-route pattern under `/lists`. Supports hierarchy (`parents` / `children`). |
-| **ListEntityRelController** (Relations) | **8** | `POST/GET/PATCH /relations`, `GET /relations/count`, `GET/PUT/PATCH/DELETE /relations/{id}`. **No hierarchy** — relations are flat. |
+| **ListController** | **11** | Same 11-route pattern under `/lists`. Supports hierarchy. |
+| **ListEntityRelController** (Relations) | **8** | `POST/GET/PATCH /relations`, `GET /relations/count`, `GET/PUT/PATCH/DELETE /relations/{id}`. No hierarchy — flat only. |
 | **EntityReactionController** | **11** | Same 11-route pattern under `/entity-reactions`. Supports hierarchy. |
 | **ListReactionController** | **11** | Same 11-route pattern under `/list-reactions`. Supports hierarchy. |
-| **EntitiesThroughListController** | **4** | `GET/POST/PATCH/DELETE /lists/{id}/entities` — traverse into a list's member entities. |
-| **ListsThroughEntitiesController** | **1** | `GET /entities/{id}/lists` — find all lists containing a given entity. |
+| **EntitiesThroughListController** | **4** | `GET/POST/PATCH/DELETE /lists/{id}/entities` |
+| **ListsThroughEntitiesController** | **1** | `GET /entities/{id}/lists` |
 | **ReactionsThroughEntityController** | **4** | `GET/POST/PATCH/DELETE /entities/{id}/reactions` |
 | **ReactionsThroughListController** | **4** | `GET/POST/PATCH/DELETE /lists/{id}/reactions` |
 | **PingController** | **1** | `GET /ping` — health check, returns `200 OK`. |
-| **Total** | **66** | *(The component documentation rounds to 67; this reflects the canonical controller breakdown.)* |
+| **SystemInfoController** | **1** | `GET /system-info` — diagnostics: uptime, resolved configuration (sensitive values masked). |
+| **Total** | **67** | |
 
-> **EPS vs. Gateway count reconciliation:** The Gateway's `application-routes.yaml` defines **65 Base Generic routes** — these correspond to all EPS domain endpoints except `/ping`, which is handled as a utility route inside the Gateway. The Gateway then adds 73 Kind Alias routes (domain projections, 8 extra for Dynamic Hierarchy) + 2 utility routes (`/ping`, `/openapi`) = **140 total gateway routes**.
+> **EPS vs. Gateway count reconciliation:** The Gateway's Base Generic route set mirrors the **65 domain endpoints** from EPS (all endpoints except `/ping` and `/system-info`, which are not proxied through the Gateway). The Gateway adds 73 Kind Alias routes + 2 utility routes (`/ping`, `/openapi`) = **140 total gateway routes**.
 
 ### B. The Gateway Transformation (The Magic)
 
