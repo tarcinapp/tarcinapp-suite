@@ -2,7 +2,7 @@
 
 ## Overview
 
-Domain projection is the mechanism by which the Gateway transforms the generic Tarcinapp API (`/entities`, `/lists`, etc.) into a domain-specific API (`/books`, `/shelves`, `/book-reviews`, etc.) — entirely through configuration, without writing any backend code.
+Domain projection is the mechanism by which the Gateway transforms the generic Tarcinapp API (`/entities`, `/lists`, etc.) into a domain-specific API (`/books`, `/shelves`, `/book-reviews`, etc.) — entirely through configuration, without writing any backend code. It is one part of Tarcinapp's tiered development model: domain modeling, API shaping, validation, and security are configuration-driven; complex business logic that goes beyond what configuration can express is handled in the Orchestration Layer (see `24_CONCEPT_orchestration-layer.md`).
 
 A single Tarcinapp deployment can simultaneously expose both a generic surface and a domain-specific surface, or lock down to domain-only by toggling the generic routes off.
 
@@ -615,7 +615,7 @@ POST /api/v1/lists/shelves                           ← create a shelf
 GET  /api/v1/lists/shelves/{id}/entities/books       ← books in a shelf
 ```
 
-All managed by the gateway configuration alone — no EPS code changes, no schema migrations.
+All managed by gateway and EPS configuration alone — no code changes, no schema migrations. If custom business logic is needed on top of this surface (e.g., auto-populating a field from another record), add it in the Orchestration Layer.
 
 ---
 

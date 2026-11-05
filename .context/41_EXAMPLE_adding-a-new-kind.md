@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide shows how to add a new business object type (`_kind`) to an existing Tarcinapp deployment without writing any code. The example uses the books application from `40_EXAMPLE_books-app.md` as the starting point and adds several new kind types.
+This guide shows how to add a new business object type (`_kind`) to an existing Tarcinapp deployment using only configuration changes — no application code required. The example uses the books application from `40_EXAMPLE_books-app.md` as the starting point and adds several new kind types. If the new kind eventually needs custom business logic (validation rules, data enrichment, side effects), that is handled separately in the Orchestration Layer — see `42_EXAMPLE_custom-business-logic.md`.
 
 ---
 

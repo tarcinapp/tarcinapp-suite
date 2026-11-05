@@ -12,11 +12,11 @@
 
 ## What It Is
 
-`entity-persistence-universal-orchestrator` is the **optional business logic layer** in the Tarcinapp suite. It sits between the Gateway and `entity-persistence-service` and intercepts every request/response to allow custom pre-processing and post-processing logic.
+`entity-persistence-universal-orchestrator` is the **designated code extension point** of the Tarcinapp suite. It sits between the Gateway and `entity-persistence-service` and intercepts every request/response to allow custom pre-processing and post-processing logic.
 
-This component is a **template / blueprint** — you clone it and extend it for your specific product. It ships with stub pre- and post-processor classes for every one of the EPS endpoints (74 processor classes across 37 operations), all wired into Apache Camel routes. You implement business logic by filling in those stubs.
+This component is a **template / blueprint** — you clone it and extend it for your specific product. It ships with stub pre- and post-processor classes for every one of the EPS endpoints (74 processor classes across 37 operations), all wired into Apache Camel routes. You implement business logic by filling in those stubs. Unimplemented stubs are zero-overhead pass-throughs — you only add code where your product actually needs it.
 
-> The orchestrator is optional. The Gateway can call `entity-persistence-service` directly. You add the orchestrator to the topology only when you need custom logic that cannot be expressed through Gateway filters or OPA policies.
+> **When to deploy it:** Simple deployments that rely purely on configuration (kind aliases, JSON schema validation, record limits, OPA rules) do not need the orchestrator in the topology. Add it when your product requires cross-record enrichment, external integrations, complex conditional flows, or async side effects — anything that genuinely requires procedural code. The framework is designed to make this a clear, low-friction step, not a last resort.
 
 ---
 

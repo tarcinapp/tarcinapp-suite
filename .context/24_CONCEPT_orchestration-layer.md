@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Orchestration Layer is the designated location for custom business logic in the Tarcinapp suite. It is entirely optional — the system works without it. You add it when you need behavior that cannot be expressed through gateway configuration or OPA policies.
+The Orchestration Layer is the **designated, first-class extension point** for custom business logic in the Tarcinapp suite. It is optional in the sense that simple deployments (pure CRUD with configuration-level rules) may not need it — but it is the intended and expected path for any product requirement that cannot be expressed through gateway configuration or OPA policies alone. Tarcinapp explicitly provides a template repository (`entity-persistence-universal-orchestrator`) with pre-wired stub processors for every endpoint so that adding custom logic is a matter of filling in the right class, not building scaffolding from scratch.
 
 This document explains: what the orchestration layer is, when to use it, how it integrates with the rest of the system, and how to extend the universal orchestrator template for a specific product.
 

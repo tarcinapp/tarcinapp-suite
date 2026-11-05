@@ -13,7 +13,7 @@ This walkthrough builds a complete books application on Tarcinapp from zero. At 
 - `GET /api/v1/books/{id}/reactions/reviews` — get reviews for a book
 - `POST /api/v1/books/{id}/reactions/reviews` — write a review
 
-All via configuration — zero backend code.
+All via configuration — no backend code required for this domain. Tarcinapp follows a configuration-first model: domain modeling, API shaping, validation, security, and lifecycle rules are all expressed through environment variables and YAML. If your product needs custom logic beyond what configuration provides (e.g., enriching a new book record from an external author service), the Orchestration Layer (see `42_EXAMPLE_custom-business-logic.md`) is the designated, pre-wired extension point.
 
 ---
 
