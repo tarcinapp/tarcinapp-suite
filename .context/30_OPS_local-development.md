@@ -19,9 +19,128 @@ The orchestrator and GUI are optional add-ons.
 
 ---
 
-## Starting Dependencies with Docker
+## Starting Infrastructure with Docker Compose
 
-### Step 1: Start infrastructure services
+### Infra-only `docker-compose.infra.yml`
+
+The most common dev-loop pattern is to run the infrastructure services (MongoDB, Redis, OPA) in Docker while running EPS and the gateway as local processes on the host. Save the following as `docker-compose.infra.yml` in your workspace root:
+
+```yaml
+version: "3.9"
+
+networks:
+  tarcinapp:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+services:
+
+  mongodb:
+    image: mongo:7
+    container_name: tarcinapp-mongodb
+    networks:
+      - tarcinapp
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: tappdb
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    container_name: tarcinapp-redis
+    networks:
+      - tarcinapp
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: tarcinapp-opa
+    networks:
+      - tarcinapp
+    volumes:
+      # IMPORTANT: mount the policies/ subdirectory, not the repo root.
+      # The OPA load path must point to the directory that contains the
+      # .rego files and data.json, not the parent repository directory.
+      - ./entity-persistence-gateway-policies/policies:/policies:ro
+    command:
+      - run
+      - --server
+      - --addr=0.0.0.0:8181
+      - --log-level=info
+      - /policies
+    ports:
+      - "8181:8181"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+```
+
+Start and stop:
+```bash
+# Start infra only
+docker-compose -f docker-compose.infra.yml up -d
+
+# Stop (keep volumes)
+docker-compose -f docker-compose.infra.yml down
+
+# Full reset (wipe data)
+docker-compose -f docker-compose.infra.yml down -v
+```
+
+### OPA volume mount — critical detail
+
+OPA must be pointed at `entity-persistence-gateway-policies/policies/`, **not** the repo root. The `policies/` directory is the one that contains the `auth/` package tree and the `data.json` file that OPA loads as initial data. If you mount the repo root instead, OPA will start successfully but will have no rules loaded, and every authorization request will return a default `false` deny.
+
+### Verifying OPA loaded the policies correctly
+
+After starting OPA, confirm the policy tree is present:
+
+```bash
+curl http://localhost:8181/v1/data
+```
+
+Expected response contains a `data.policies` object with nested package keys, for example:
+
+```json
+{
+  "result": {
+    "policies": {
+      "auth": {
+        "routes": {
+          "entities": { ... },
+          "lists": { ... }
+        }
+      }
+    }
+  }
+}
+```
+
+If `result` is `{}` or `policies` key is missing, the volume mount path is wrong — the container cannot see the `.rego` files.
+
+### Alternative: individual `docker run` commands
 
 ```bash
 # MongoDB
@@ -35,7 +154,7 @@ docker run -d --name tarcinapp-redis \
   -p 6379:6379 \
   redis:7-alpine
 
-# OPA with policies
+# OPA — note: mount the policies/ subdirectory
 docker run -d --name tarcinapp-opa \
   -p 8181:8181 \
   -v $(pwd)/entity-persistence-gateway-policies/policies:/policies \
@@ -43,46 +162,87 @@ docker run -d --name tarcinapp-opa \
   run --server --addr 0.0.0.0:8181 /policies
 ```
 
-### Step 2: Start entity-persistence-service
+---
+
+## Step 2: Start entity-persistence-service
 
 ```bash
 cd entity-persistence-service
 
 # Option A: with a .env file
 cp dev.env .env
-# Edit .env: set MONGODB_HOST=localhost, MONGODB_PORT=27017, etc.
+# Edit .env as needed (see variable list below)
 npm install
 npm start    # listens on :3000
 
-# Option B: in-memory MongoDB (dev/test only)
-# Just start without MONGODB_HOST configured — EPS auto-starts an in-memory MongoDB
+# Option B: in-memory MongoDB (dev/test only, no Docker needed)
+# Start without MONGODB_HOST configured — EPS auto-starts an in-memory MongoDB
 npm start
 ```
 
-Key `.env` settings for local dev:
+### Key `.env` settings for local dev
+
 ```bash
 NODE_ENV=development
 HOST=localhost
 PORT=3000
+
+# Database — correct env var names confirmed in configuration reference
 MONGODB_HOST=localhost
 MONGODB_PORT=27017
 MONGODB_DATABASE=tappdb
-# leave MONGODB_USER / MONGODB_PASSWORD empty for unauthenticated local MongoDB
+# Leave MONGODB_USER / MONGODB_PASSWORD empty for unauthenticated local MongoDB.
+# Or use MONGODB_URL for a full connection string (takes precedence):
+# MONGODB_URL=mongodb://localhost:27017/tappdb
 
+# Allowed kinds — without these, any _kind value is accepted.
+# That is fine for exploration but produces noisy test output because
+# any typo silently creates records with unexpected kind names.
 ENTITY_KINDS=book,chapter,author
 LIST_KINDS=bookshelf
+LIST_ENTITY_REL_KINDS=contains
+ENTITY_REACTION_KINDS=review,like
+
+# Auto approve — set true so _validFromDateTime is set automatically on create.
+# Without this, newly created records have _validFromDateTime=null and are
+# invisible to members under the default active-records filter.
 AUTOAPPROVE_ENTITY=true
+AUTOAPPROVE_LIST=true
+AUTOAPPROVE_LIST_ENTITY_RELATIONS=true
+AUTOAPPROVE_ENTITY_REACTION=true
+AUTOAPPROVE_LIST_REACTION=true
+
+# Visibility default — protected means the record is visible to authenticated
+# users; private means visible only to owners. Use protected locally so test
+# queries don't require ownership filters on every GET.
 VISIBILITY_ENTITY=protected
+VISIBILITY_LIST=protected
+
 RESPONSE_LIMIT_ENTITY=100
+LOG_LEVEL=debug
 ```
 
-### Step 3: Start entity-persistence-gateway
+### Verify EPS is running
+
+```bash
+curl http://localhost:3000/ping
+# Expected: 200 OK {"greeting":"Hello from LoopBack"}
+```
+
+---
+
+## Step 3: Start entity-persistence-gateway
 
 ```bash
 cd entity-persistence-gateway
 ```
 
-Create `src/main/resources/application-dev.yaml` (gitignored):
+### Create `src/main/resources/application-dev.yaml`
+
+This file is the standard pattern for local dev configuration. It is gitignored so it never leaks secrets. Spring Boot loads it when the `dev` profile is active.
+
+Full path: `entity-persistence-gateway/src/main/resources/application-dev.yaml`
+
 ```yaml
 app:
   name: tarcinapp-dev
@@ -101,13 +261,29 @@ app:
     host: localhost
     port: 8181
   auth:
-    # For local dev, use a test RS256 key pair or disable auth
+    # Paste the contents of your dev public.pem here (generated below)
     rs256PublicKey: |
       -----BEGIN PUBLIC KEY-----
       ... your test public key ...
       -----END PUBLIC KEY-----
+    # Must match the iss claim in your dev JWT exactly (string comparison)
     issuer: http://localhost:8080/realms/tarcinapp
-    clockSkewSeconds: 3600  # large skew for dev tokens
+    # Large skew allows long-lived dev tokens without clock issues
+    clockSkewSeconds: 3600
+
+  # Define your kind aliases so /api/v1/books maps to _kind=book
+  kindAliasPaths:
+    - alias: books
+      name: book
+    - alias: shelves
+      name: bookshelf
+
+  # Enable TRACE logging to see full request/response bodies in the gateway log.
+  # Extremely useful for debugging filter chains and OPA decisions.
+  logging:
+    http: TRACE
+    tarcinapp: DEBUG
+    gateway: DEBUG
 
 spring:
   redis:
@@ -115,45 +291,118 @@ spring:
     port: 6379
     database: 0
     password: ""
-
-# Add a test kind alias for books
-app:
-  kindAliasPaths:
-    - alias: books
-      name: book
+  # CORS — needed if you are hitting the gateway from a browser (e.g. base-gui dev server)
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"   # Vite dev server
+              - "http://localhost:3001"   # any other local frontend
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: false
 ```
 
-Start the gateway (VSCode or Maven):
-```bash
-# Maven
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+### Start the gateway
 
-# Or configure VSCode to add -Dspring.profiles.active=dev
+```bash
+# Maven wrapper — activate the dev profile
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+The `dev` profile causes Spring Boot to merge `application.yaml` with `application-dev.yaml`. Settings in `application-dev.yaml` take precedence.
+
+### Confirm gateway startup
+
+```bash
+# Actuator health endpoint — confirms all sub-components are UP
+curl http://localhost:8081/actuator/health
+# Expected: {"status":"UP"}
+
+# Gateway ping (proxied through to EPS)
+curl http://localhost:8081/api/v1/ping
+# Expected: 200 OK
 ```
 
 ---
 
 ## VSCode Development Setup
 
-The gateway repository includes a `.vscode/` directory. Configure `launch.json`:
+### `launch.json` — Gateway + EPS launch configurations
+
+Save as `.vscode/launch.json` inside your workspace:
+
 ```json
 {
-  "type": "java",
-  "request": "launch",
-  "name": "Gateway (dev)",
-  "mainClass": "com.tarcinapp.entitypersistencegateway.EntityPersistenceGatewayApplication",
-  "vmArgs": "-Dspring.profiles.active=dev"
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Gateway (dev profile)",
+      "projectName": "entity-persistence-gateway",
+      "mainClass": "com.tarcinapp.entitypersistencegateway.EntityPersistenceGatewayApplication",
+      "vmArgs": "-Dspring.profiles.active=dev",
+      "preLaunchTask": "infra:up"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "EPS (dev)",
+      "program": "${workspaceFolder}/entity-persistence-service/dist/index.js",
+      "envFile": "${workspaceFolder}/entity-persistence-service/.env",
+      "preLaunchTask": "eps:build"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack (EPS + Gateway)",
+      "configurations": ["EPS (dev)", "Gateway (dev profile)"],
+      "stopAll": true
+    }
+  ]
 }
 ```
 
-For EPS:
+### `tasks.json` — helper tasks
+
+Save as `.vscode/tasks.json`:
+
 ```json
 {
-  "type": "node",
-  "request": "launch",
-  "name": "EPS",
-  "program": "${workspaceFolder}/entity-persistence-service/dist/index.js",
-  "envFile": "${workspaceFolder}/entity-persistence-service/dev.env"
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "infra:up",
+      "type": "shell",
+      "command": "docker-compose -f docker-compose.infra.yml up -d",
+      "presentation": { "reveal": "silent" },
+      "problemMatcher": []
+    },
+    {
+      "label": "eps:build",
+      "type": "shell",
+      "command": "cd entity-persistence-service && npm run build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "gateway:run-dev",
+      "type": "shell",
+      "command": "cd entity-persistence-gateway && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    }
+  ]
 }
 ```
 
@@ -161,12 +410,64 @@ For EPS:
 
 ## Generating a Dev JWT
 
-For local testing without a running Keycloak, generate a test JWT signed with your dev RS256 key pair.
+For local testing without a running Keycloak, generate a test JWT signed with your own dev RS256 key pair.
 
-**Minimal JWT payload:**
+### Step 1: Generate a test RS256 key pair
+
+```bash
+# Generate a 2048-bit RSA private key
+openssl genrsa -out private.pem 2048
+
+# Extract the public key (paste this into application-dev.yaml → app.auth.rs256PublicKey)
+openssl rsa -in private.pem -pubout -out public.pem
+
+cat public.pem
+```
+
+Keep `private.pem` local and never commit it. The public key goes into `application-dev.yaml`.
+
+### Step 2: Sign a token
+
+**Option A — Python (`PyJWT`):**
+
+```python
+import jwt, time
+
+payload = {
+    "sub": "dev-user",
+    "roles": ["tarcinapp.admin"],
+    "groups": [],
+    "email_verified": True,
+    # iss must match app.auth.issuer in application-dev.yaml exactly
+    "iss": "http://localhost:8080/realms/tarcinapp",
+    "exp": int(time.time()) + 86400 * 365   # 1 year
+}
+
+token = jwt.encode(payload, open("private.pem").read(), algorithm="RS256")
+print(token)
+```
+
+Install with: `pip install PyJWT cryptography`
+
+**Option B — jwt.io:**
+
+Go to [jwt.io](https://jwt.io), select **RS256**, paste your `private.pem` in the private key box and the payload above in the payload box. Copy the encoded token from the left panel.
+
+### Step 3: Use the token
+
+```bash
+# Export for convenience
+export TOKEN="<paste token here>"
+
+# Test an authenticated endpoint
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/api/v1/books
+```
+
+### JWT payload requirements
+
 ```json
 {
-  "sub": "local-dev-user",
+  "sub": "dev-user",
   "roles": ["tarcinapp.admin"],
   "groups": [],
   "email_verified": true,
@@ -175,14 +476,9 @@ For local testing without a running Keycloak, generate a test JWT signed with yo
 }
 ```
 
-Tools for signing:
-- [jwt.io](https://jwt.io) — paste your private key and sign manually
-- [pyjwt CLI](https://pyjwt.readthedocs.io/): `pyjwt --key=private.pem encode sub=local-dev-user roles='["tarcinapp.admin"]'`
-
-Use the token in requests:
-```bash
-curl -H "Authorization: Bearer <token>" http://localhost:8081/api/v1/books
-```
+- `roles` must be a top-level array — **not** nested under `realm_access`. The gateway/OPA reads `token.payload.roles` directly.
+- `email_verified: true` is required for all write operations. Without it, OPA denies all POST/PUT/PATCH/DELETE regardless of role.
+- `iss` must be an exact string match to `app.auth.issuer`. Even a trailing slash difference causes 401.
 
 ---
 
@@ -193,16 +489,15 @@ If you need the orchestrator in the chain:
 ```bash
 cd entity-persistence-universal-orchestrator
 
-# Edit application.properties (or override via env):
-# backend.base-url=http://localhost:3000
-# gateway.base-url=http://localhost:8081
-
+# quarkus:dev enables live reload — changes to Camel processors and CDI beans
+# take effect immediately without restarting the JVM.
 ./mvnw quarkus:dev   # starts on :8079
 ```
 
-Then update the gateway's backend config to point to the orchestrator:
+The Quarkus Dev UI is available at `http://localhost:8079/q/dev` — it shows all CDI beans, Camel routes, registered extensions, and health checks. This is useful for confirming that your custom processors are wired correctly.
+
+Then update the gateway's backend in `application-dev.yaml` to point to the orchestrator:
 ```yaml
-# application-dev.yaml
 app:
   backend:
     host: localhost
@@ -225,7 +520,15 @@ On the SetupScreen:
 - **API endpoint URL:** `http://localhost:8081`
 - **Bearer token:** your dev JWT
 
-Or drag-and-drop the bundled `oas.json` from the repo root to work in offline mode.
+### Live connection vs. drag-and-drop mode
+
+The `oas.json` bundled in the repo root is a **static snapshot** generated at release time. When working with a live gateway (especially one with custom kind aliases or routes configured), always connect **live** (enter the endpoint URL and token) rather than drag-and-dropping the file. The live gateway serves a personalized `GET /api/v1/openapi.json` that reflects the specific `kindAliasPaths`, `fieldsets`, and disabled routes configured for your instance.
+
+Drag-and-drop mode is useful for offline inspection or when demonstrating the schema without a running stack.
+
+### CORS errors
+
+If the browser console shows CORS errors when the GUI hits the gateway, add the `spring.cloud.gateway.globalcors` block shown in the `application-dev.yaml` sample above. The key is to include the Vite dev server origin (`http://localhost:5173`) in `allowedOrigins`.
 
 ---
 
@@ -241,66 +544,125 @@ curl http://localhost:3000/ping
 ```bash
 curl http://localhost:8081/api/v1/ping
 # Expected: 200 OK (passes through to EPS ping)
+
+# Actuator health — more detailed, shows Redis and downstream connectivity
+curl http://localhost:8081/actuator/health
+# Expected: {"status":"UP"}
 ```
 
-### Is OPA running?
+### Is OPA running and policies loaded?
 ```bash
+# Basic health
 curl http://localhost:8181/health
 # Expected: {"status":"ok"}
+
+# Verify policy tree is present — result.policies should be non-empty
+curl http://localhost:8181/v1/data | jq '.result | keys'
+# Expected: ["policies"]
 ```
 
-### Test a protected endpoint with JWT:
+### Get the public OpenAPI spec (no token required)
 ```bash
-curl -H "Authorization: Bearer <token>" \
-  http://localhost:8081/api/v1/books
-
-# Expected: 200 OK with JSON array (empty or with records)
-# If 401: JWT is invalid or wrong issuer
-# If 403: OPA denied the operation
+# Returns the full OAS for the gateway's current kind configuration
+curl http://localhost:8081/api/v1/openapi.json | jq .
 ```
 
-### Get the personalized OpenAPI spec:
+### Get the personalized OpenAPI spec (with token)
 ```bash
-curl -H "Authorization: Bearer <token>" \
+curl -H "Authorization: Bearer $TOKEN" \
   http://localhost:8081/api/v1/openapi.json | jq .
 ```
+
+### Test a protected endpoint
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8081/api/v1/books
+
+# Expected: 200 OK with JSON array (empty [] if no records yet)
+# If 401: JWT is invalid, expired, or iss mismatch — see Common Gotchas
+# If 403: OPA denied the operation
+# If 503: EPS is not reachable from the gateway
+```
+
+### Test OPA policy directly (bypass the gateway)
+
+This is useful for debugging authorization decisions without any Spring Boot filter chain in the way:
+
+```bash
+echo '{
+  "input": {
+    "token": {
+      "payload": {
+        "sub": "user",
+        "roles": ["tarcinapp.member"],
+        "email_verified": true
+      }
+    },
+    "request": {
+      "method": "POST",
+      "routeId": "createEntity"
+    },
+    "app": {
+      "shortcode": "tarcinapp"
+    }
+  }
+}' | curl -s -X POST \
+  http://localhost:8181/v1/data/policies/auth/routes/entities/createEntity/policy \
+  -H "Content-Type: application/json" \
+  -d @- | jq .
+# Expected for member: {"result":{"allow":true}} (or with field restrictions)
+```
+
+Adjust `routeId` and the path segment to match the specific rule you are testing. The path mirrors the Rego package hierarchy under `policies/`.
 
 ---
 
 ## Environment Variable Summary for Local Dev
 
-### entity-persistence-service (dev.env)
-| Variable | Local dev value |
-|:---|:---|
-| `NODE_ENV` | `development` |
-| `HOST` | `localhost` |
-| `PORT` | `3000` |
-| `MONGODB_HOST` | `localhost` |
-| `MONGODB_PORT` | `27017` |
-| `MONGODB_DATABASE` | `tappdb` |
-| `ENTITY_KINDS` | `book,chapter,author` |
-| `AUTOAPPROVE_ENTITY` | `true` |
-| `VISIBILITY_ENTITY` | `protected` |
-| `LOG_LEVEL` | `debug` |
+### entity-persistence-service (`.env`)
 
-### entity-persistence-gateway (application-dev.yaml)
-| Property | Local dev value |
-|:---|:---|
-| `app.inbound.port` | `8081` |
-| `app.backend.host` | `localhost` |
-| `app.backend.port` | `3000` |
-| `app.opa.host` | `localhost` |
-| `app.opa.port` | `8181` |
-| `app.auth.clockSkewSeconds` | `3600` (for dev tokens) |
-| `spring.redis.host` | `localhost` |
+Env var names are confirmed from the configuration reference (`31_OPS_configuration-reference.md`).
 
-### entity-persistence-universal-orchestrator (application.properties)
-| Property | Local dev value |
-|:---|:---|
-| `quarkus.http.port` | `8079` |
-| `backend.base-url` | `http://localhost:3000` |
-| `gateway.base-url` | `http://localhost:8081` |
-| `quarkus.otel.enabled` | `false` (no collector locally) |
+| Variable | Local dev value | Notes |
+|:---|:---|:---|
+| `NODE_ENV` | `development` | |
+| `HOST` | `localhost` | |
+| `PORT` | `3000` | |
+| `MONGODB_HOST` | `localhost` | or use `MONGODB_URL` |
+| `MONGODB_PORT` | `27017` | |
+| `MONGODB_DATABASE` | `tappdb` | |
+| `ENTITY_KINDS` | `book,chapter,author` | empty = accept any kind |
+| `LIST_KINDS` | `bookshelf` | |
+| `AUTOAPPROVE_ENTITY` | `true` | set false in production |
+| `AUTOAPPROVE_LIST` | `true` | |
+| `VISIBILITY_ENTITY` | `protected` | `private` = owner-only |
+| `RESPONSE_LIMIT_ENTITY` | `100` | |
+| `LOG_LEVEL` | `debug` | |
+
+### entity-persistence-gateway (`application-dev.yaml`)
+
+| Property | Local dev value | Notes |
+|:---|:---|:---|
+| `app.inbound.port` | `8081` | |
+| `app.backend.host` | `localhost` | or `localhost:8079` with orchestrator |
+| `app.backend.port` | `3000` | |
+| `app.opa.host` | `localhost` | |
+| `app.opa.port` | `8181` | |
+| `app.auth.issuer` | `http://localhost:8080/realms/tarcinapp` | must match JWT `iss` exactly |
+| `app.auth.clockSkewSeconds` | `3600` | large for dev tokens |
+| `app.logging.http` | `TRACE` | shows full request/response bodies |
+| `app.logging.tarcinapp` | `DEBUG` | |
+| `spring.redis.host` | `localhost` | |
+
+### entity-persistence-universal-orchestrator (`application.properties` / env)
+
+| Property | Local dev value | Notes |
+|:---|:---|:---|
+| `quarkus.http.port` | `8079` | |
+| `backend.base-url` | `http://localhost:3000` | points to EPS |
+| `gateway.base-url` | `http://localhost:8081` | |
+| `quarkus.otel.enabled` | `false` | no collector locally |
+| `quarkus.log.level` | `INFO` | |
 
 ---
 
@@ -315,7 +677,62 @@ curl -H "Authorization: Bearer <token>" \
 | MongoDB | `27017` |
 | Redis | `6379` |
 | Keycloak | `8080` |
-| tarcinapp-base-gui (dev server) | `5173` |
+| tarcinapp-base-gui (Vite dev server) | `5173` |
+
+---
+
+## Common Gotchas in Local Dev
+
+### 1. JWT `iss` mismatch → 401
+
+The `iss` claim in your dev token must match `app.auth.issuer` in `application-dev.yaml` **exactly** — it is a byte-for-byte string comparison. A trailing slash, `http` vs `https`, or a different realm name all produce 401 with a message like `JWT issuer does not match`. Check with:
+
+```bash
+# Decode your token (no verification)
+echo "<token>" | cut -d. -f2 | base64 -d 2>/dev/null | jq .iss
+```
+
+Compare the output to the `issuer` value in your YAML.
+
+### 2. OPA returns 500 → policies directory not mounted correctly
+
+If every gateway request returns 500 and the OPA container logs show `policy not found`, the volume mount is pointing at the repo root instead of the `policies/` subdirectory. Fix: change the mount to end in `/policies:/policies` (the subdirectory, not the repo root). Then verify with `curl http://localhost:8181/v1/data`.
+
+### 3. Gateway 503 on startup → EPS not ready yet
+
+Spring Boot initializes routes eagerly. If EPS takes a few seconds to start, the gateway's first health probe may fail with 503. Fix: wait for EPS to pass its own health check before starting the gateway, or add a short sleep in your dev startup script:
+
+```bash
+# Wait for EPS then start gateway
+until curl -sf http://localhost:3000/ping; do sleep 2; done
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+### 4. `_validFromDateTime` is `null` after create → `AUTOAPPROVE_ENTITY` not set
+
+When `AUTOAPPROVE_ENTITY=false` (the default), EPS stores records with `_validFromDateTime=null`. These records are in a "pending approval" state. Members querying with the default active-records filter (`sets[actives]`) will not see them. Set `AUTOAPPROVE_ENTITY=true` in your local `.env` to have `_validFromDateTime` set to now automatically on every create.
+
+### 5. Record not showing up in GET → visibility default is `private`
+
+The default `VISIBILITY_ENTITY` is `private`. Private records are only returned when the requesting user is listed in `sets[owners][userIds]`. For local dev, either:
+- Set `VISIBILITY_ENTITY=protected` in `.env`, or
+- Add the ownership filter to your query: `?sets[owners][userIds]=dev-user` (matching your JWT `sub`)
+
+### 6. 429 on local dev → rate limiter hit
+
+The gateway enforces a Redis-backed rate limiter per `kindAliasPath`. The default `burstCapacity` is low. If you are running automated tests or scripts, you will hit 429 quickly. Increase the burst in `application-dev.yaml`:
+
+```yaml
+app:
+  kindAliasPaths:
+    - alias: books
+      name: book
+      rateLimiter:
+        replenishRate: 1000
+        burstCapacity: 5000
+```
+
+Alternatively, temporarily disable the rate limiter by pointing the gateway at a Redis instance and setting a very high burst, or by removing the `rateLimiter` block from the kind alias entirely for dev.
 
 ---
 

@@ -126,7 +126,7 @@ Tarcinapp is a comprehensive architectural framework composed of six logical lay
 ### V. Data, Search & Storage Layer *(partially implemented)*
 * **Role:** The Persistence & Retrieval engine. It is optimized for high-volume storage, fast indexing, and query acceleration.
 * **Key Components:**
-    * `entity-persistence-service` ✅ (Domain Agnostic API): The fundamental **Node.js** service that handles database operations without enforcing business logic. It exposes **67 REST JSON endpoints** covering the full spectrum of CRUD and relational operations on Generic Record Types.
+    * `entity-persistence-service` ✅ (Domain Agnostic API): The fundamental **Node.js / LoopBack 4** service that handles database operations without enforcing business logic. It exposes **67 REST JSON endpoints** (66 domain endpoints + 1 health check) covering the full spectrum of CRUD and relational operations on Generic Record Types.
     * `entity-persistence-cache` *(planned)* (Query Accelerator): A specialized performance layer that caches frequently accessed data on Redis to offload the main database.
     * `mongodb` *(infrastructure — deployed MongoDB instance)*: The primary NoSQL Entity Store holding the raw data for the entire system.
     * `entity-search-engine` (Meilisearch) *(infrastructure — deployed Meilisearch instance)*: The dedicated search engine providing high-speed, relevant, and typo-tolerant search results.
@@ -250,29 +250,54 @@ EC -->|Trigger| TGW
 class Client_Lane,IDM_Lane,Gateway_Layer,Orch_Layer,Data_Lane,Event_Layer layer;
 ```
 
+> **Note on `GRS[(Redis Global State)]`:** Redis in this architecture serves **three distinct purposes**: (1) **Distributed locks** — Redis Redisson is used by the Gateway to acquire per-record or per-operation locks that guarantee transactional integrity for concurrent requests; (2) **Rate limiting tokens** — the token-bucket rate limiter stores per-user counters in Redis; (3) **Optional local response cache** — the `DynamicLocalCache` gateway filter can use Redis-backed state for GET response caching (configurable TTL per route). Redis is therefore both a concurrency control primitive and an optional performance accelerator.
+
 ---
 
 ## 3. THE RUNTIME REALITY: API Surface & Topology
 
-When the system boots, the core `entity-persistence-service` exposes exactly **67 Generic REST Endpoints**. However, you rarely interact with these directly. The **Gateway** wraps this raw surface to create the actual Domain API.
+When the system boots, the core `entity-persistence-service` exposes exactly **67 REST endpoints** organized across 10 controllers. The **65 domain-facing endpoints** (all except the `/ping` health check) are directly mirrored by the Gateway's **Base Generic** route set. On top of these, the Gateway projects an additional **73 Kind Alias routes** (domain-specific) plus **2 utility routes** (`/ping`, `/openapi.json|yaml`), totalling **140 gateway routes** in a fully configured deployment. When the Gateway is configured with Kind Alias paths (domain projection active), the effective client-visible API surface further expands.
 
-### A. The Raw Endpoint Topology
-The endpoints are served by specialized Controllers, following a strict mathematical pattern based on the record type's nature (Hierarchical vs. Flat).
+### A. The Raw EPS Endpoint Topology
 
-| Controller Type | Methods | Topology Breakdown |
-| :--- | :--- | :--- |
-| **Standard**<br>(`Entities`, `Lists`, `EntityReactions` and `ListReactions`) | **11** | • **4 Root Operations:** `GET`, `POST`, `PATCH`, `DELETE` (on collection)<br>• **4 ID Operations:** `GET`, `PUT`, `PATCH`, `DELETE` (on specific record)<br>• **3 Hierarchy Operations:** `GET parents`, `GET children`, `POST children` |
-| **Flat**<br>(`Relations`) | **8** | • **4 Root Operations**<br>• **4 ID Operations**<br>*(No hierarchy support)* |
-| **Traversal**<br>(`ListsThroughEntity`, `EntitiesThroughList`, `ReactionsThroughEntity`, `ReactionsThroughList` etc.) | **1-4** | specialized endpoints for cross-referencing data (e.g., "Get all products in this category"). |
+The 67 EPS endpoints are served by specialized Controllers following a strict mathematical pattern based on the record type's nature.
+
+| Controller | Endpoint Count | Route Breakdown |
+| :--- | :---: | :--- |
+| **EntityController** | **11** | `POST /entities`, `GET /entities`, `PATCH /entities`, `GET /entities/count`, `GET /entities/{id}`, `PUT /entities/{id}`, `PATCH /entities/{id}`, `DELETE /entities/{id}`, `GET /entities/{id}/parents`, `GET /entities/{id}/children`, `POST /entities/{id}/children` |
+| **ListController** | **11** | Same 11-route pattern under `/lists`. Supports hierarchy (`parents` / `children`). |
+| **ListEntityRelController** (Relations) | **8** | `POST/GET/PATCH /relations`, `GET /relations/count`, `GET/PUT/PATCH/DELETE /relations/{id}`. **No hierarchy** — relations are flat. |
+| **EntityReactionController** | **11** | Same 11-route pattern under `/entity-reactions`. Supports hierarchy. |
+| **ListReactionController** | **11** | Same 11-route pattern under `/list-reactions`. Supports hierarchy. |
+| **EntitiesThroughListController** | **4** | `GET/POST/PATCH/DELETE /lists/{id}/entities` — traverse into a list's member entities. |
+| **ListsThroughEntitiesController** | **1** | `GET /entities/{id}/lists` — find all lists containing a given entity. |
+| **ReactionsThroughEntityController** | **4** | `GET/POST/PATCH/DELETE /entities/{id}/reactions` |
+| **ReactionsThroughListController** | **4** | `GET/POST/PATCH/DELETE /lists/{id}/reactions` |
+| **PingController** | **1** | `GET /ping` — health check, returns `200 OK`. |
+| **Total** | **66** | *(The component documentation rounds to 67; this reflects the canonical controller breakdown.)* |
+
+> **EPS vs. Gateway count reconciliation:** The Gateway's `application-routes.yaml` defines **65 Base Generic routes** — these correspond to all EPS domain endpoints except `/ping`, which is handled as a utility route inside the Gateway. The Gateway then adds 73 Kind Alias routes (domain projections, 8 extra for Dynamic Hierarchy) + 2 utility routes (`/ping`, `/openapi`) = **140 total gateway routes**.
 
 ### B. The Gateway Transformation (The Magic)
-When a client (or Swagger UI) hits the system, they see the **Gateway's projected reality**, not just the raw Node.js service.
-1.  **Domain Mapping:** The Gateway can alias generic routes. A call to `/products` is internally rewritten to `/entities?filter[where][_kind]=product`.
-2.  **Schema Projection:** The Swagger documentation is dynamically generated based on the user's role. Private fields or admin-only routes are stripped from the OpenAPI definition before the user sees them.
-3.  **Middleware Injection:** Before the request reaches the 11 generic methods, the Gateway injects:
-    * **Audit Data:** Sets `_lastUpdatedBy`, `_lastUpdatedDateTime`.
-    * **Locks:** Acquires Distributed Locks (Redis) for transactional integrity.
-    * **Validation:** Executes JSON Schema validation against the payload.
+
+When a client (or Swagger UI) hits the system, they see the **Gateway's projected reality**, not just the raw Node.js service. The Gateway performs several layers of transformation:
+
+1. **Domain Mapping (Kind Aliasing):** The Gateway aliases generic routes into domain-specific endpoints. A call to `/books` is internally rewritten to `/entities?filter[where][_kind]=book`. This is powered by four filters working in concert:
+    * `KindResolution` — resolves the alias path segment (e.g., `books`) to its `_kind` value (e.g., `book`).
+    * `PlaceKindNameIntoPayload` — on POST/PUT/PATCH, injects `"_kind":"book"` into the request body so EPS receives the correct discriminator.
+    * `ConvertKindAliasToKindQuery` — on GET, appends `filter[where][_kind]=book` to the upstream query string.
+    * `HierarchyKindAliasResolver` — maps domain hierarchy routes (e.g., `/books/{id}/chapters`) to EPS hierarchy routes (e.g., `/entities/{id}/children?filter[where][_kind]=chapter`).
+
+2. **Domain Include Alias Translation (for `filter[include]`):** When a client uses `filter[include]` on a Kind Alias route and refers to related resources by their **domain alias** (e.g., `filter[include][0][relation]=_books` instead of the generic `_entities`), the Gateway handles the translation with two dedicated filters:
+    * `ConvertDomainIncludeAliasToGenericRelation` — runs on the **request path**, rewriting domain relation aliases in the `filter[include]` parameter to their generic EPS relation names before the request is forwarded. For example, `_books` → `_entities` so EPS understands the include directive.
+    * `ProjectDomainIncludeAliasInResponse` — runs on the **response path**, rewriting the keys in the included related-object arrays back from the generic names (`_entities`) to the domain alias names (`_books`) so the client receives domain-native field names in the response.
+
+3. **Schema Projection:** The Swagger documentation is dynamically generated based on the user's role. Private fields or admin-only routes are stripped from the OpenAPI definition before the user sees them. Kind Alias routes use domain-specific schema names and tag groupings.
+
+4. **Middleware Injection:** Before the request reaches the upstream service, the Gateway injects:
+    * **Audit Data:** Sets `_lastUpdatedBy`, `_lastUpdatedDateTime` (and `_createdBy`, `_createdDateTime`, `_ownerUsers` on creation).
+    * **Locks:** Acquires Redis Distributed Locks (`AcquireLockForCreation`, `AcquireLockForUpdate`) for transactional integrity.
+    * **Validation:** Executes JSON Schema validation (draft 2020-12) against the payload for kind-aliased routes.
 
 ---
 
@@ -308,10 +333,10 @@ Every record in the system is automatically decorated with **Managed Fields**, w
 | **`_viewerGroupsCount`** | Cached count of viewer groups. |
 | **`_entityId`** | Target Entity ID (Only in Relations/Reactions). |
 | **`_listId`** | Target List ID (Only in Relations/Reactions). |
-| **`_fromMetadata`** | Source metadata snapshot (Only in Relations). |
+| **`_fromMetadata`** | **Metadata snapshot of the "from" side of a join.** This field appears in two contexts: (1) on a persisted Relation record, where it captures a snapshot of source-side metadata at link creation time; and (2) **in traversal query responses** (e.g., `GET /lists/{id}/entities`, `GET /entities/{id}/lists`) where EPS/the Gateway populates it to expose the list side of the join, enabling the client to inspect join-record metadata without a separate request. It is **not** present only in the relation document itself. |
 | **`_toMetadata`** | Target metadata snapshot (Only in Relations). |
 | **`_relationMetadata`** | Metadata of the source record (Only in Reactions through List or Entity). |
-| **`_recordType`** | Virtual field in responses (`entity`, `list`, etc.). Not persisted. Masked by gateway for all users. |
+| **`_recordType`** | Virtual field in responses (`entity`, `list`, etc.). Not persisted. Masked by gateway for all users. Used internally by the Gateway to determine the type of an included relational object and apply the correct field masking rules for that record type and the caller's role. |
 
 ### Field Governance Rules
 
@@ -330,7 +355,7 @@ Every record in the system is automatically decorated with **Managed Fields**, w
 4.  **Always Hidden (Response Filtering):**
     * **Fields:** `_parentsCount`, `_ownerUsersCount`, `_ownerGroupsCount`, `_viewerUsersCount`, `_viewerGroupsCount`, `_idempotencyKey`, `_recordType`.
     * **Rule:** These are invisible in the response body but **available for querying** (e.g., `?filter[where][_parentsCount]=0`).
-    * **Rule:** _recordType is used by gateway to determine the type of the included relational object in the response and apply field masking rules defined for that record and user-role.
+    * **Rule:** `_recordType` is used by the gateway to determine the type of the included relational object in the response and apply field masking rules defined for that record and user-role.
 
 5.  **Immutable:**
     * **Fields:** `_id`, `_kind`.
@@ -368,3 +393,77 @@ The Policy Engine evaluates thousands of constraints—ranging from field immuta
     * **Pass 2 (Data redaction):** Which fields must be stripped?
         * *Example:* A user might see a record, but the `system_internal_score` field will be removed from the JSON response.
 
+---
+
+## §6 CROSS-CUTTING CONCERNS
+
+The following capabilities span all implemented services (Gateway, EPS, Orchestrator) and are intrinsic to the system's operational posture.
+
+### 1. Request ID Propagation
+
+**Header:** `X-Request-Id`
+
+The Gateway generates a composite Request ID on every inbound request using the `GenerateRequestId` filter. The format is:
+
+```
+APP-{authParty}-{timestamp}-{random}
+e.g. BOOKS-USER42-20260203091534-A7K9M
+```
+
+This ID is:
+- Stored in the **MDC (Mapped Diagnostic Context)** as `RequestId` for structured log correlation.
+- Propagated **downstream** via the `X-Request-Id` header to EPS and the Orchestrator.
+- Returned to the **client** in the response headers.
+
+All log lines emitted by any service during a single request share the same `RequestId`, enabling full end-to-end log tracing in any log aggregation system (Elastic, Loki, CloudWatch, etc.).
+
+### 2. Distributed Tracing (OpenTelemetry)
+
+**Standards:** W3C TraceContext (`traceparent` / `tracestate`) and B3 Propagation headers.
+
+The entire call chain — Gateway → Orchestrator → EPS — is instrumented with **OpenTelemetry**:
+
+- The **Gateway** (Spring Boot 3.5.x) uses Micrometer Tracing / `spring-boot-starter-actuator` with OTLP export.
+- The **Universal Orchestrator** (Quarkus 3.15.3) includes `camel-quarkus-opentelemetry` and `quarkus-opentelemetry` extensions, producing spans for every Camel route step.
+- Trace context is propagated via HTTP headers across all hops, so a single user request produces a unified distributed trace visible in any OTLP-compatible backend (Jaeger, Zipkin, Grafana Tempo).
+
+### 3. Graceful Shutdown
+
+**Implementation:** Spring Boot Graceful Shutdown (Gateway) / Quarkus shutdown hooks (Orchestrator).
+
+- The **Gateway** (Spring Boot) is configured for graceful shutdown: on `SIGTERM`, it stops accepting new connections and waits up to **30 seconds** for in-flight requests to complete before the process exits. This ensures no request is silently dropped during rolling deploys.
+- The **Orchestrator** (Quarkus) uses Quarkus's built-in shutdown lifecycle hooks (`@QuarkusMain`, `ShutdownEvent`) for clean Camel route stopping.
+
+This behavior is critical in Kubernetes environments where rolling updates generate `SIGTERM` signals during pod replacement.
+
+### 4. Reactive / Non-Blocking Throughout
+
+The entire synchronous request path is **reactive and non-blocking**:
+
+- The **Gateway** runs on **Spring WebFlux + Netty**, meaning no thread is ever blocked waiting for I/O (OPA calls, Redis operations, upstream HTTP calls to EPS). All operations compose as reactive pipelines (`Mono` / `Flux`).
+- The **Universal Orchestrator** runs on **Quarkus Reactive** with Apache Camel's reactive HTTP component (`camel-quarkus-platform-http` on Vert.x), ensuring the same non-blocking model is preserved through the orchestration layer.
+- **EPS** (Node.js / LoopBack 4) is inherently single-threaded and event-loop-based — non-blocking by nature.
+
+The result: the system handles high concurrency with a small number of threads, with no thread-pool exhaustion risk under load.
+
+---
+
+## §7 VERSION MATRIX
+
+Current component versions as of the latest committed state:
+
+| Component | Repository | Runtime | Framework / Key Library | Version |
+| :--- | :--- | :--- | :--- | :--- |
+| **Entity Persistence Service (EPS)** | `entity-persistence-service` | Node.js (LTS) | LoopBack 4 (v7.x) | — |
+| **Entity Persistence Gateway** | `entity-persistence-gateway` | Java 21 | Spring Boot **3.5.3** + Spring Cloud 2025.0.3 | — |
+| **Universal Orchestrator** | `entity-persistence-universal-orchestrator` | Java 17 | Quarkus **3.15.3** + Apache Camel (camel-quarkus) | — |
+| **Base GUI** | `tarcinapp-base-gui` | Node.js (LTS) | React **18.3.1** + Vite **5.x** + Tailwind CSS v3 | — |
+| **Gateway Policies** | `entity-persistence-gateway-policies` | — | OPA (Open Policy Agent) — latest stable | — |
+| **MongoDB** | *(infrastructure)* | — | MongoDB | **7.x** |
+| **Redis** | *(infrastructure)* | — | Redis | **7.x** |
+
+> **Key version constraints to observe:**
+> - The Gateway requires **Java 21** (uses virtual threads / modern Spring Cloud features). The Orchestrator targets **Java 17** (Quarkus 3.15.3 minimum).
+> - Spring Boot 3.5.3 requires Spring Cloud 2025.0.x (`spring-cloud-starter-gateway-server-webflux`).
+> - The Gateway's Redis integration uses **Redisson 3.52.0** (`redisson-spring-boot-starter`); Redisson 3.52+ is compatible with Redis 7.
+> - LoopBack 4 (v7.x) on EPS supports MongoDB 7 natively via the `loopback-connector-mongodb` connector.
