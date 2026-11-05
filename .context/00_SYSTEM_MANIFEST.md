@@ -1,5 +1,16 @@
 # 00_SYSTEM_MANIFEST.md
 
+> **Project status note:** This document describes the full architectural vision of the Tarcinapp Suite.
+>
+> **Implemented repos (available in this workspace):**
+> `entity-persistence-service` · `entity-persistence-gateway` · `entity-persistence-gateway-policies` · `entity-persistence-universal-orchestrator` · `tarcinapp-base-gui`
+>
+> **Planned repos (not yet created):** `tarcinapp-ingress-proxy` · `tarcinapp-ui-server` · `entity-search-gateway` · `entity-persistence-bff-orchestrator` · `entity-search-indexer` · `entity-s3-orchestrator` · `entity-cdc-event-producer` · `entity-event-transformer` · `entity-event-consumer`
+>
+> **Infrastructure services** (not repos — deployed instances of existing products): Keycloak · RabbitMQ · Redpanda · MongoDB · Redis · Meilisearch · S3/MinIO · OPA · Nginx · Postgres
+
+---
+
 ## SYSTEM IDENTITY: Tarcinapp Microservices Suite
 
 You are an expert Solutions Architect and Senior Developer working on the **Tarcinapp Suite**.
@@ -83,54 +94,54 @@ The system supports standard HTTP verbs (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`
 
 Tarcinapp is a comprehensive architectural framework composed of six logical layers. Each layer has a specific responsibility and manages specific repositories.
 
-### I. Client & Entrance Layer
+### I. Client & Entrance Layer *(planned — no repo yet)*
 * **Role:** The system's front door and traffic manager. It handles ingress, SSL termination, and routes requests to the appropriate internal services.
 * **Key Components:**
-    * `tarcinapp-ingress-proxy`: An Nginx-based reverse proxy that sits at the very edge. It exposes the application to the internet and acts as the traffic controller, routing requests internally to either the UI Server or the API Gateways.
-    * `tarcinapp-ui-server`: A Server-Side Rendering (SSR) engine designed to power **dynamic SaaS frontends**. It sits securely **behind** the Nginx ingress proxy, rendering the application state on the server of the SaaS product.
+    * `tarcinapp-ingress-proxy` *(planned)*: An Nginx-based reverse proxy that sits at the very edge. It exposes the application to the internet and acts as the traffic controller, routing requests internally to either the UI Server or the API Gateways.
+    * `tarcinapp-ui-server` *(planned)*: A Server-Side Rendering (SSR) engine designed to power **dynamic SaaS frontends**. It sits securely **behind** the Nginx ingress proxy, rendering the application state on the server of the SaaS product.
 
-### II. Identity Management (IdM) Layer
+### II. Identity Management (IdM) Layer *(infrastructure — no custom repo)*
 * **Role:** The central authority for Identity. It handles Authentication (AuthN), user management, and token issuance. It is the only source of truth for "Who is the user?".
 * **Key Components:**
-    * `tarcinapp-idm-service`: Keycloak (Identity Provider).
-    * `tarcinapp-idm-db`: Dedicated Postgres database for identity data.
+    * `tarcinapp-idm-service` *(infrastructure — deployed Keycloak instance)*: Keycloak (Identity Provider).
+    * `tarcinapp-idm-db` *(infrastructure — deployed Postgres instance)*: Dedicated Postgres database for identity data.
 
-### III. Gateway & Security Layer
+### III. Gateway & Security Layer ✅ *Implemented*
 * **Role:** The "Smart Guard". It acts as the Policy Enforcement Point (PEP) and Traffic Controller. It handles API security, Fine-Grained RBAC (Role Based Access Control), Rate Limiting, **Distributed Locking**, and Traffic Shaping.
 * **Deep Logic:** It transforms generic requests into secured internal calls. It enforces **Ownership**, **Visibility**, and **Liveness** rules before traffic ever reaches the business logic.
 * **Key Components:**
-    * `entity-persistence-gateway`: The primary transactional gateway (**Spring Cloud Gateway**). Handles CRUD and persistence traffic.
-    * `entity-search-gateway`: The read-only search gateway (**Spring Cloud Gateway**). Proxies and secures Meilisearch traffic by injecting filters to guarantee that the search results do not contain anything that the caller is not authorized to see. 
-    * `entity-persistence-gateway-policies`: The **OPA-based** policy repository containing the Rego logic for authorization and field redaction.
+    * `entity-persistence-gateway` ✅: The primary transactional gateway (**Spring Cloud Gateway**). Handles CRUD and persistence traffic.
+    * `entity-search-gateway` *(planned)*: The read-only search gateway (**Spring Cloud Gateway**). Proxies and secures Meilisearch traffic by injecting filters to guarantee that the search results do not contain anything that the caller is not authorized to see.
+    * `entity-persistence-gateway-policies` ✅: The **OPA-based** policy repository containing the Rego logic for authorization and field redaction.
 
-### IV. Orchestration Layer
+### IV. Orchestration Layer *(partially implemented)*
 * **Role:** The "Brain" and Business Logic Execution Layer. It sits between the Gateway and the Data Layer to manage complex workflows, data aggregation, and asynchronous tasks. This is where domain-specific logic is implemented by AI agents.
 * **Key Components:**
-    * `entity-persistence-universal-orchestrator`: The primary microservice template and a blueprint for defining main business workflows and complex orchestrations. Domain-specific development happens based on cloning this repository.
-    * `entity-persistence-bff-orchestrator`: A specialized Camel Quarkus application acting as a **Page Aggregator**. It aggregates and shapes data specifically for the User Interface.
-    * `entity-persistence-work-queue-bus` (RabbitMQ): The message broker managing asynchronous work queues within the orchestration layer, decoupling heavy tasks from the request loop.
-    * `entity-search-indexer`: A specialized orchestrator that consumes data changes from Redpanda and writes them into **Meilisearch** indexes, ensuring search data is up-to-date.
-    * `entity-s3-orchestrator`: A specialized orchestrator handling all integration with S3-compatible object storage.
+    * `entity-persistence-universal-orchestrator` ✅: The primary microservice template and a blueprint for defining main business workflows and complex orchestrations. Domain-specific development happens based on cloning this repository.
+    * `entity-persistence-bff-orchestrator` *(planned)*: A specialized Camel Quarkus application acting as a **Page Aggregator**. It aggregates and shapes data specifically for the User Interface.
+    * `entity-persistence-work-queue-bus` (RabbitMQ) *(infrastructure — deployed RabbitMQ instance)*: The message broker managing asynchronous work queues within the orchestration layer, decoupling heavy tasks from the request loop.
+    * `entity-search-indexer` *(planned)*: A specialized orchestrator that consumes data changes from Redpanda and writes them into **Meilisearch** indexes, ensuring search data is up-to-date.
+    * `entity-s3-orchestrator` *(planned)*: A specialized orchestrator handling all integration with S3-compatible object storage.
 
-### V. Data, Search & Storage Layer
+### V. Data, Search & Storage Layer *(partially implemented)*
 * **Role:** The Persistence & Retrieval engine. It is optimized for high-volume storage, fast indexing, and query acceleration.
 * **Key Components:**
-    * `entity-persistence-service` (Domain Agnostic API): The fundamental **Node.js** service that handles database operations without enforcing business logic. It exposes **67 REST JSON endpoints** covering the full spectrum of CRUD and relational operations on Generic Record Types.
-    * `entity-persistence-cache` (Query Accelerator): A specialized performance layer that caches frequently accessed data on Redis to offload the main database.
-    * `mongodb`: The primary NoSQL Entity Store holding the raw data for the entire system.
-    * `entity-search-engine` (Meilisearch): The dedicated search engine providing high-speed, relevant, and typo-tolerant search results.
-    * `entity-persistence-object-store` (S3/MinIO): The object storage backend for persisting user files and static assets.
+    * `entity-persistence-service` ✅ (Domain Agnostic API): The fundamental **Node.js** service that handles database operations without enforcing business logic. It exposes **67 REST JSON endpoints** covering the full spectrum of CRUD and relational operations on Generic Record Types.
+    * `entity-persistence-cache` *(planned)* (Query Accelerator): A specialized performance layer that caches frequently accessed data on Redis to offload the main database.
+    * `mongodb` *(infrastructure — deployed MongoDB instance)*: The primary NoSQL Entity Store holding the raw data for the entire system.
+    * `entity-search-engine` (Meilisearch) *(infrastructure — deployed Meilisearch instance)*: The dedicated search engine providing high-speed, relevant, and typo-tolerant search results.
+    * `entity-persistence-object-store` (S3/MinIO) *(infrastructure — deployed object storage instance)*: The object storage backend for persisting user files and static assets.
 * **Data Contracts (EPS):**
     * **Generic Record Types:** `entities`, `lists`, `relations`, `entityReactions`, `listReactions`.
     * **URI Scheme:** Internal linking uses: `tapp://localhost/{recordType}/{id}`.
 
-### VI. Event & Reaction Layer
+### VI. Event & Reaction Layer *(planned — no repos yet)*
 * **Role:** The Asynchronous Nervous System. It monitors data changes (CDC), transforms raw technical data into domain events, and triggers reactive side effects by pushing actions back through the Gateway.
 * **Key Components:**
-    * `entity-cdc-event-producer` (Debezium): The CDC engine that reads the MongoDB Oplog to capture data changes in real-time and produces raw change events.
-    * `entity-event-backbone` (Redpanda): The high-performance, Kafka-compatible central event bus serving as the backbone for all asynchronous communication.
-    * `entity-event-transformer`: A specialized processor that consumes raw technical events and converts them into meaningful **Domain Event** formats for downstream consumption.
-    * `entity-event-consumer` (Event Pusher): The reactive agent that consumes processed events and triggers reactions by sending requests back to the **Gateway**, effectively acting as an automated system user.
+    * `entity-cdc-event-producer` (Debezium) *(planned repo)*: The CDC engine that reads the MongoDB Oplog to capture data changes in real-time and produces raw change events.
+    * `entity-event-backbone` (Redpanda) *(infrastructure — deployed Redpanda instance)*: The high-performance, Kafka-compatible central event bus serving as the backbone for all asynchronous communication.
+    * `entity-event-transformer` *(planned)*: A specialized processor that consumes raw technical events and converts them into meaningful **Domain Event** formats for downstream consumption.
+    * `entity-event-consumer` (Event Pusher) *(planned)*: The reactive agent that consumes processed events and triggers reactions by sending requests back to the **Gateway**, effectively acting as an automated system user.
 
 ---
 
