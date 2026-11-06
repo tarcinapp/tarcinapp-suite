@@ -578,6 +578,21 @@ Use the orchestrator when you need logic that **cannot** be expressed through:
 - JSON schema validation (handled by Gateway)
 - Rate limiting, locking, caching (handled by Gateway)
 - Simple `_kind` filtering (handled by Kind Aliasing)
+- Uniqueness / record-limit distributed locking (handled by `entity-persistence-cache` — see below)
+
+---
+
+## This Repository as a Template
+
+`entity-persistence-universal-orchestrator` is not only a runnable service — it is the **canonical template** for building any transparent proxy component in the Tarcinapp suite that needs to intercept EPS traffic. Components built on this template inherit the full route coverage (68 Camel routes mirroring all 67 EPS endpoints), correct proxy mechanics (`bridgeEndpoint=true`, hop-by-hop header stripping), OpenTelemetry tracing, and the CDI processor injection pattern.
+
+**Planned components built from this template:**
+
+| Component | Purpose |
+|:---|:---|
+| `entity-persistence-cache` *(planned)* | Distributed lock enforcement for uniqueness/limit TOCTOU + GET response caching. See [`15_COMPONENT_entity-persistence-cache.md`](./15_COMPONENT_entity-persistence-cache.md). |
+
+When cloning this template for a new infrastructure component (rather than a product-specific orchestrator), replace the business-logic stubs with the infrastructure service's CDI beans, update `application.properties` defaults, and rename the artifact in `pom.xml`.
 
 ---
 
@@ -595,6 +610,8 @@ Use the orchestrator when you need logic that **cannot** be expressed through:
 
 ## Related Documents
 - `00_SYSTEM_MANIFEST.md §2 Layer IV` — Orchestration layer description
+- `15_COMPONENT_entity-persistence-cache.md` — EPC: a sibling component built from this template
 - `24_CONCEPT_orchestration-layer.md` — When to use orchestration vs. gateway vs. OPA
+- `25_CONCEPT_concurrency-and-integrity.md` — TOCTOU analysis and the role of EPC locks
 - `11_COMPONENT_entity-persistence-gateway.md` — How the gateway routes to the orchestrator
 - `10_COMPONENT_entity-persistence-service.md` — The service the orchestrator proxies to

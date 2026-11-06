@@ -231,11 +231,31 @@ LIST_REACTION_UNIQUENESS="where[_kind]=like&where[_entityId]=${_entityId}&set[ac
 4. **Multiple rules** — separate complete rules with `,`: each rule is evaluated independently and any violation triggers a 409.
 5. **Template interpolation** — `${_kind}`, `${_slug}`, `${_name}`, `${_listId}`, `${_entityId}`, `${department}`, etc. Any field present on the incoming record can be referenced.
 
+**Per-owner uniqueness with `set[owners]`:**
+
+`set[owners]` scopes the uniqueness check to records that share the same owner(s) as the incoming record. When combined with `${_ownerUsers}` interpolation it means: *"check for duplicates only among records owned by the same user(s)"*. This makes uniqueness **per-owner** rather than global.
+
+```bash
+ENTITY_UNIQUENESS="where[_kind]=${_kind}&where[_slug]=${_slug}&set[owners][userIds]=${_ownerUsers}"
+```
+
+With this rule:
+- User 1 creates a `book` with `_slug: the-great-gatsby` → **allowed** (no existing book with this slug owned by user 1)
+- User 2 creates a `book` with `_slug: the-great-gatsby` → **allowed** (the duplicate check is scoped to user 2's records; user 1's record is not counted)
+- User 1 creates a **second** `book` with `_slug: the-great-gatsby` → **409** (user 1 already owns a book with this slug)
+
+Without `set[owners]`, the rule `where[_kind]=${_kind}&where[_slug]=${_slug}` would be global: user 2 would also receive a 409 because user 1's record already exists with that slug, regardless of ownership.
+
+> **`_ownerUsers` is an array field.** When the incoming record has `_ownerUsers: ["user-1", "user-2"]` (co-ownership), `${_ownerUsers}` interpolates to `user-1,user-2` and `set[owners][userIds]` checks against all named users. A duplicate is flagged if any record exists that is owned by *any* of those users and matches the other conditions.
+
 **Practical examples:**
 
 ```bash
-# Slug unique globally per kind
+# Slug unique globally per kind (cross-user: no two users can have the same slug)
 ENTITY_UNIQUENESS="where[_kind]=${_kind}&where[_slug]=${_slug}"
+
+# Slug unique per owner per kind (each user has their own slug namespace)
+ENTITY_UNIQUENESS="where[_kind]=${_kind}&where[_slug]=${_slug}&set[owners][userIds]=${_ownerUsers}"
 
 # Name unique among active records only
 ENTITY_UNIQUENESS="where[_name]=${_name}&set[actives]"
@@ -640,6 +660,10 @@ All error responses follow `{ error: { statusCode, name, message, code, status, 
 3. **`_version` not incremented on `updateAll`**: Bulk `PATCH /entities?where[...]` does not increment `_version`. Only single-record `PATCH`/`PUT` /{id} does.
 
 4. **Dot-notation in connected model filters**: In `listFilter` and `entityFilter` on relation queries, dot-notation (e.g., `metadata.status.current`) is not reliably parsed. Use bracket-notation in the outer filter parameters instead.
+
+5. **Uniqueness and record-limit checks are best-effort under concurrent load (TOCTOU)**: Both `checkUniqueness` and `checkLimits` follow a check-then-act pattern: they count existing records, then decide to accept or reject, then insert. Two concurrent requests opening MongoDB transactions at the same moment both see the same snapshot and can both pass the check, producing a duplicate or over-limit record. MongoDB snapshot isolation does not prevent this. **Mitigation:** Deploy `entity-persistence-cache` (EPC) in the topology, which acquires Redis locks keyed on the interpolated uniqueness/limit scope before forwarding requests to EPS, serialising concurrent writes that share the same logical key. For wide-scope global limits (no interpolatable fields in the scope), best-effort behaviour is accepted by design. For scalar uniqueness rules, a MongoDB unique index provides an atomic backstop. See [`25_CONCEPT_concurrency-and-integrity.md`](./25_CONCEPT_concurrency-and-integrity.md) for the full analysis.
+
+6. **No `E11000 → 409` translator**: If a MongoDB unique index catches a duplicate that slipped through all application-level checks, EPS currently surfaces a raw 500 error instead of translating the `E11000 duplicate key` error into a 409 Conflict response. Adding this translator in the repository base class is the recommended hardening step for deployments that rely on database-level unique indexes as a backstop.
 
 ---
 
