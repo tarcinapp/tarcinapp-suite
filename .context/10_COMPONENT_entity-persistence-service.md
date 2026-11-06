@@ -270,6 +270,8 @@ ENTITY_UNIQUENESS="where[_name]=${_name}&where[department]=${department}&set[act
 ENTITY_REACTION_UNIQUENESS="where[_kind]=like&where[_entityId]=${_entityId}&set[actives]&set[owners],where[_kind]=review&where[_entityId]=${_entityId}&set[actives]&set[owners]"
 ```
 
+> **Concurrency enforcement by `entity-persistence-cache` (EPC):** Unlike record limits (which have an opt-in `enforceSerialisation` flag for wide-scope rules), uniqueness rules are **always** enforced with a distributed Redis lock by EPC. This is safe because every valid uniqueness rule must contain at least one interpolatable field — the lock key is therefore always scoped to specific runtime values (e.g. a specific kind + slug + user) and never global. No additional configuration is required. See [`15_COMPONENT_entity-persistence-cache.md`](./15_COMPONENT_entity-persistence-cache.md) for the full locking design.
+
 **Error response on violation** — HTTP 409:
 ```json
 {
@@ -345,9 +347,13 @@ LIST_REACTION_RECORD_LIMITS='[{"scope":"","limit":1000}]'
 ```json
 [
   {
-    "scope": "string",    // Filter expression: "" = global, or where/set clauses
-    "limit": 100,         // Maximum number of records matching the scope
-    "duration": "30d"     // OPTIONAL: sliding time window (counts only records created within this window)
+    "scope": "string",              // Filter expression: "" = global, or where/set clauses
+    "limit": 100,                   // Maximum number of records matching the scope
+    "duration": "30d",              // OPTIONAL: sliding time window (counts only records created within this window)
+    "enforceSerialisation": false   // OPTIONAL: when true, signals entity-persistence-cache (EPC) to acquire
+                                    // a distributed lock for this rule even when scope has no interpolatable
+                                    // fields. EPS itself ignores this field — it is a passthrough consumed
+                                    // by EPC via /system-info. Default: false (best-effort).
   }
 ]
 ```
@@ -385,6 +391,12 @@ RELATION_RECORD_LIMITS='[{"scope":"where[_listId]=${_listId}","limit":100}]'
 
 # Rate limit with sliding window: max 100 books created in last 30 days
 ENTITY_RECORD_LIMITS='[{"scope":"where[_kind]=book","limit":100,"duration":"30d"}]'
+
+# Hard licence/seat cap: max 10 records total, EPC enforces with a global lock
+ENTITY_RECORD_LIMITS='[{"scope":"","limit":10,"enforceSerialisation":true}]'
+
+# Mixed: soft burst rate limit (best-effort) + hard global cap (serialised via EPC)
+ENTITY_RECORD_LIMITS='[{"scope":"","limit":2,"duration":"1min"},{"scope":"","limit":10,"enforceSerialisation":true}]'
 ```
 
 **Duration behaviour:**

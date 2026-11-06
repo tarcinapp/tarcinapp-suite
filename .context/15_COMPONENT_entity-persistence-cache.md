@@ -164,6 +164,8 @@ All locks must be acquired before the request proceeds. If any one acquisition t
 
 The second request in each pair still reaches EPS's own uniqueness check as the authoritative gate; the locks ensure that requests sharing any owner dimension do not race past that check simultaneously.
 
+> **EPC always acquires a lock for uniqueness rules — no opt-in flag is needed.** Every valid uniqueness rule must contain at least one interpolatable field (e.g. `${_kind}`, `${_slug}`, `${_ownerUsers}`) — a uniqueness rule with only static literal values would mean "only one record with these exact hardcoded field values can ever exist", which has no practical use case. Because at least one interpolated dimension is always present, the lock key is always scoped to specific runtime values and never global. The wide-scope serialisation problem that requires `enforceSerialisation` on record-limit rules simply does not arise for uniqueness.
+
 ### For record-limit rules
 
 Given a record-limit rule:
@@ -181,13 +183,38 @@ e.g.  BOOKS:epc:lock:limit:entity:a3f9c2:user-123
 
 ### Wide-scope and global limits
 
-For limit rules whose scope contains **no interpolatable fields** (e.g. `""` — global cap, or `where[_kind]=book` — kind-wide cap), the lock key is not scoped to a single user or tenant. Serialising on such a key would force all creates across all users to queue sequentially, which is not acceptable in a multi-tenant environment.
+For limit rules whose scope contains **no interpolatable fields** (e.g. `""` — global cap, or `where[_kind]=book` — kind-wide cap), the lock key would be identical for every create request regardless of who makes it. Acquiring that lock serialises the entire collection globally — unacceptable by default in a multi-tenant environment under normal throughput, but entirely correct and desirable for certain use cases such as hard licence-seat caps.
 
-**Decision:** EPC does **not** acquire a lock for wide-scope / non-interpolatable limit rules. These rules remain best-effort, exactly as documented in `10_COMPONENT_entity-persistence-service.md`:
+**EPC behaviour is opt-in, controlled by `enforceSerialisation` on the limit rule.**
 
-> *"Limit counting is not atomic with the create operation (best-effort). For strict quotas in high-concurrency scenarios, consider database-level strategies."*
+```json
+{"scope": "",                  "limit": 10,  "enforceSerialisation": true}
+{"scope": "where[_kind]=book", "limit": 500, "enforceSerialisation": true}
+{"scope": "",                  "limit": 500}
+```
 
-The practical overshoot for a global limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas (rate limits, abuse prevention) this is acceptable. For hard quotas at collection level, a MongoDB counter document with atomic `$inc` is the correct solution and is out of scope for EPC.
+When `enforceSerialisation: true`, EPC acquires a lock keyed on the fully resolved (non-interpolated) scope string:
+
+```
+BOOKS:epc:lock:limit:entity:global          (scope: "")
+BOOKS:epc:lock:limit:entity:kind:book       (scope: "where[_kind]=book")
+```
+
+When `enforceSerialisation` is absent or `false` (the default), wide-scope rules remain best-effort — no lock is acquired and EPS's own count check is the sole gate.
+
+**`enforceSerialisation` is defined on the EPS `RecordLimit` schema** and preserved through to `/system-info`. EPS itself never acts on it — it is a passthrough field meaningful only to EPC. See `10_COMPONENT_entity-persistence-service.md §Record Limits` for the full schema and examples.
+
+**Choosing when to set `enforceSerialisation: true`:**
+
+| Scenario | Recommendation |
+|:---|:---|
+| Hard licence/seat cap (e.g. max 10 total records) | `true` — correctness over throughput |
+| Hard per-kind cap at low volume (e.g. max 5 featured articles) | `true` — low contention, safe to serialise |
+| Soft global rate limit (e.g. max 2 creates/minute) | `false` — occasional overshoot is acceptable |
+| High-volume kind cap (e.g. max 500,000 books) | `false` — global serialisation would bottleneck the system |
+| Per-user/per-kind cap with interpolatable scope | N/A — always locked per the interpolated dimensions, no flag needed |
+
+The practical overshoot when `enforceSerialisation: false` for a global limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable. For hard quotas at high volume where serialisation is also unacceptable, a MongoDB counter document with atomic `$inc` remains the correct solution and is out of scope for EPC.
 
 ---
 

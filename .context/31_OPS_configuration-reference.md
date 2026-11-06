@@ -151,15 +151,20 @@ The `set[actives]`, `set[publics]`, and `set[owners]` modifiers narrow the uniqu
 Record limit rule structure:
 ```json
 {
-  "scope": "where[_kind]=book",   // filter expression (empty string = global)
-  "limit": 100,                   // max allowed records
-  "duration": "30d"               // optional: rolling window (s, m, h, d, w)
+  "scope": "where[_kind]=book",      // filter expression (empty string = global)
+  "limit": 100,                      // max allowed records
+  "duration": "30d",                 // OPTIONAL: rolling window (s, m, h, d, w)
+  "enforceSerialisation": false      // OPTIONAL: when true, signals entity-persistence-cache (EPC)
+                                     // to acquire a global distributed lock for this rule even when
+                                     // scope has no interpolatable fields. EPS ignores this field —
+                                     // it is a passthrough consumed by EPC via /system-info.
+                                     // Default: false (best-effort). See 15_COMPONENT_entity-persistence-cache.md.
 }
 ```
 
 Examples:
 ```bash
-# Global cap: max 500 entities, plus a short-burst cap of 2 per minute
+# Global cap: max 500 entities, plus a short-burst cap of 2 per minute (both best-effort)
 ENTITY_RECORD_LIMITS='[{"scope":"","limit":2,"duration":"1min"},{"scope":"","limit":500}]'
 
 # Limit book entities created in the last 30 days
@@ -167,6 +172,9 @@ ENTITY_RECORD_LIMITS='[{"scope":"where[_kind]=book","limit":100,"duration":"30d"
 
 # Limit reactions per entity to 500 in the last 30 days (dynamic scope)
 ENTITY_REACTION_RECORD_LIMITS='[{"scope":"where[_entityId]=${_entityId}","limit":500,"duration":"30d"}]'
+
+# Hard licence/seat cap: max 10 records total, EPC enforces with a global lock
+ENTITY_RECORD_LIMITS='[{"scope":"","limit":10,"enforceSerialisation":true}]'
 ```
 
 ### Idempotency
