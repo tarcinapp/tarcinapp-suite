@@ -260,15 +260,21 @@ EPC caches the full response body of GET requests in Redis. This covers collecti
 
 > **Count queries are not cached.** `GET /entities/count` and equivalent count endpoints are excluded from caching. Count values are invalidated by any create or delete in the collection, giving them the lowest possible cache hit rate in write-active systems. They are also cheap for MongoDB on indexed fields. Caching count results would require the broadest possible invalidation surface for the lowest benefit.
 
-**Cache key** is composed of:
-- HTTP method + normalised path + sorted query string
-- Optionally: a user-identity dimension for private/owner-scoped responses (configurable per route)
+**Cache key** is composed of: HTTP method + normalised path + sorted query string.
 
 ```
 BOOKS:epc:cache:GET:/entities?filter[where][_kind]=book&filter[limit]=10
 BOOKS:epc:cache:GET:/entities/abc-123
 BOOKS:epc:cache:GET:/lists/xyz/entities
 ```
+
+The query string is an inherently sufficient cache discriminator because the gateway's sets injection encodes the caller's authorized scope directly into it before the request reaches EPC:
+
+- **admin / editor** — no sets injected; all admins/editors see the same full-corpus response for a given query. Sharing one cache entry across all callers of that role is correct.
+- **member** — `set[audience][userIds]={sub}&set[audience][groupIds]={groups}` is injected, making the query string unique per caller identity and group membership.
+- **visitor** — `set[actives]=true&set[publics]=true` is injected (no identity values), since visitors can only see public+active records regardless of who they are. All visitors making the same request share one cache entry, which is correct because their responses are identical.
+
+A separate user-identity dimension in the cache key is therefore not needed and is not part of the design.
 
 ### Invalidation timing
 
@@ -402,7 +408,6 @@ The reverse index sets (`epc:ridx:entity:{_id}`) and tag indexes (`epc:tagidx:en
 | `epc.cache.ttl.entity-reaction` | `EPC_CACHE_TTL_ENTITY_REACTION` | _(inherits default)_ | TTL override for entity-reaction GET responses |
 | `epc.cache.ttl.list-reaction` | `EPC_CACHE_TTL_LIST_REACTION` | _(inherits default)_ | TTL override for list-reaction GET responses |
 | `epc.cache.enabled` | `EPC_CACHE_ENABLED` | `true` | Enable/disable GET response caching globally |
-| `epc.cache.user-scoped-paths` | `EPC_CACHE_USER_SCOPED_PATHS` | _(none)_ | Comma-separated path patterns whose cache keys include the caller's `X-User-Id` (for owner/private responses) |
 | `quarkus.redis.hosts` | `QUARKUS_REDIS_HOSTS` | `redis://localhost:6379` | Redis connection URL |
 
 ---
