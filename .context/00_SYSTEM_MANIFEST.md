@@ -449,6 +449,35 @@ The entire synchronous request path is **reactive and non-blocking**:
 
 The result: the system handles high concurrency with a small number of threads, with no thread-pool exhaustion risk under load.
 
+### 5. Application Shortcode Propagation
+
+**Header:** `X-App-Shortcode`
+
+The Gateway injects the configured `app.shortcode` value on every proxied request using the `InjectAppShortcodeHeader` filter. This makes the **application deployment identity** available to all downstream services — the Universal Orchestrator, Entity Persistence Cache, and Entity Persistence Service — without requiring them to maintain their own copy of the application shortcode configuration.
+
+**Why this matters:**
+
+Tarcinapp is a multi-application platform. The same gateway binary (and the same downstream service binaries) can be deployed as `books`, `music`, `erp`, or any other application simply by setting `app.shortcode` in the gateway. Downstream services must be able to identify *which application* they are serving to:
+
+1. **Namespace Redis keys correctly.** All Redis keys in the system are prefixed with `{appShortcode}` to prevent collision when multiple applications share a single Redis cluster. The gateway's own lock keys (`{appShortcode}:lock:creation:...`, `{appShortcode}:lock-on-record-update:...`) and EPC's cache keys (`{APP_SHORTCODE}:epc:cache:...`) follow this convention. Without `X-App-Shortcode`, downstream services would need to replicate `app.shortcode` in their own configuration, creating a synchronisation risk.
+
+2. **Build application-scoped local cache keys.** The gateway's own in-process cache key target format is `{appShortcode}:cache:METHOD:PATH:?query:userId`, consistent with all other Redis key patterns in the system.
+
+3. **Enable per-application logic in the Orchestration Layer.** Orchestrator processors can read `X-App-Shortcode` to branch on application-specific behaviour (e.g., different enrichment logic for `books` vs. `music`). This is the mechanism that allows a single shared orchestrator deployment to serve multiple applications.
+
+**Propagation path:**
+
+```
+Gateway (sets X-App-Shortcode: {shortcode})
+  → Universal Orchestrator (reads + forwards unchanged)
+    → Entity Persistence Cache (reads for key namespacing, forwards unchanged)
+      → Entity Persistence Service (reads if needed for diagnostics)
+```
+
+The header is automatically forwarded by each service's HTTP proxy component. No special forwarding configuration is required.
+
+**Full specification:** `entity-persistence-gateway/.context/62-FEATURE-APP-SHORTCODE-PROPAGATION.md`
+
 ---
 
 ## §7 VERSION MATRIX

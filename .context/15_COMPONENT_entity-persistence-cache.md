@@ -15,11 +15,23 @@
 
 `entity-persistence-cache` (EPC) is a **transparent proxy** that sits between the Orchestration Layer and `entity-persistence-service` and serves two distinct purposes:
 
-1. **Query acceleration (primary purpose)** — caches GET response bodies in Redis with configurable TTLs, dramatically reducing MongoDB load for frequently read resources. Cache entries are invalidated when the underlying data changes, using a tiered invalidation strategy described in the [Response Caching](#response-caching) section.
+1. **Write integrity enforcement (primary purpose)** — acquires Redis distributed locks keyed on the interpolated uniqueness/limit scope before forwarding write requests to EPS, serialising concurrent writes that would collide on the same logical key and eliminating the TOCTOU race condition in EPS's uniqueness and per-user/per-kind limit checks.
 
-2. **Write integrity enforcement** — acquires Redis distributed locks keyed on the interpolated uniqueness/limit scope before forwarding write requests to EPS, serialising concurrent writes that would collide on the same logical key and eliminating the TOCTOU race condition in EPS's uniqueness and per-user/per-kind limit checks.
+2. **Single-record response caching** — caches `GET /entities/{id}`, `GET /lists/{id}`, and equivalent by-ID endpoints in Redis with configurable TTLs. Invalidation is exact: a write to a known `_id` evicts exactly that cache key. Collection/query response caching is explicitly out of scope — see [Why Collection Caching Is Not Implemented](#why-collection-caching-is-not-implemented).
 
 > **What it does NOT do:** EPC does not replace the uniqueness and record-limit checks inside EPS. Those remain as the authoritative enforcement point. EPC's lock layer is an additional guard that eliminates the race window *before* the check runs — making EPS's best-effort behaviour effectively deterministic under normal load.
+
+---
+
+## Implementation Phases
+
+EPC is built incrementally in three phases:
+
+| Phase | Scope | Status |
+|:---|:---|:---|
+| **Phase 1** | Distributed locking (uniqueness + record-limit scope locks) | Planned |
+| **Phase 2** | Single-record (`findById`) GET response caching | Planned |
+| **Phase 3** | Visitor (public + active) collection caching with TTL-only invalidation | Committed — see [Phase 3: Visitor Collection Caching](#phase-3-visitor-collection-caching) |
 
 ---
 
@@ -67,11 +79,13 @@ Gateway Request
                │
                ▼
 ┌─────────────────────────────────┐
-│  EPC PreProcessor                │  ← acquires Redis lock keyed on uniqueness/limit scope
-│  (e.g. CreateEntityPreProcessor) │  ← on lock timeout → 429 / 423
+│  EPC PreProcessor                │  ← GET /entities/{id}: cache hit → short-circuit
+│                                  │  ← POST/PUT/PATCH/DELETE: evict by-ID cache entry
+│                                  │  ← POST/PUT/PATCH: acquire Redis lock
+│                                  │  ← on lock timeout → 423
 └──────────────┬──────────────────┘
                │
-       [lock acquired]
+       [lock acquired / cache miss]
                │
                ▼
    [proxy to entity-persistence-service]
@@ -79,7 +93,7 @@ Gateway Request
                ▼
 ┌─────────────────────────────────┐
 │  EPC PostProcessor               │  ← releases lock (via doFinally)
-│                                  │  ← optionally caches GET response in Redis
+│                                  │  ← GET /entities/{id} cache miss: populate cache
 └──────────────┬──────────────────┘
                │
                ▼
@@ -114,8 +128,9 @@ EPC and EPS are deployed in the **same Kubernetes pod** (sidecar pattern), shari
 
 ```
 Client → Gateway :8081 → Orchestrator :8079 → EPC :3001 → EPS :3000 → MongoDB
-                                                    └── Redis (lock acquire/release)
-                                                    └── Redis (GET response cache)
+                │                                   │
+                └── redis-gateway (locks,           └── redis-epc (scope locks,
+                    rate limiting)                      findById cache)
 ```
 
 When the Orchestration Layer is not deployed, the topology shortens to:
@@ -147,9 +162,11 @@ EPC parses the rule (cached for 10s from `/system-info`), identifies the interpo
 For `_ownerUsers: ["user-1", "user-2"]`, EPC acquires **two locks**:
 
 ```
-BOOKS:epc:lock:uniqueness:entity:book:the-great-gatsby:user-1
-BOOKS:epc:lock:uniqueness:entity:book:the-great-gatsby:user-2
+books:epc:lock:uniqueness:entity:book:the-great-gatsby:user-1
+books:epc:lock:uniqueness:entity:book:the-great-gatsby:user-2
 ```
+
+> **`{APP_SHORTCODE}` resolution** — same pattern as the cache key: EPC reads `X-App-Shortcode` from the incoming HTTP request (injected by the gateway, forwarded by the orchestrator). See the Cache Key section below for the full resolution and fallback strategy.
 
 All locks must be acquired before the request proceeds. If any one acquisition times out, the entire operation returns 423 Locked and all already-acquired locks are released.
 
@@ -220,7 +237,9 @@ The practical overshoot when `enforceSerialisation: false` for a global limit of
 
 ## Template Basis: `entity-persistence-universal-orchestrator`
 
-EPC is built by **cloning** `entity-persistence-universal-orchestrator` and replacing the pre/post-processor stubs with lock acquisition / release logic. This choice was deliberate:
+> **Java 21 prerequisite:** The orchestrator template currently targets Java 17 (`maven.compiler.release=17`, Quarkus 3.15.3). The template repository is being migrated to Java 21 before EPC is scaffolded. EPC clones the post-migration template and therefore targets Java 21 from day one (`maven.compiler.release=21`, Quarkus upgraded to a Java-21-compatible release). No mid-project JDK upgrade is needed. This aligns EPC with the Gateway, which already runs on Java 21.
+
+EPC is built by **cloning** `entity-persistence-universal-orchestrator` and replacing the pre/post-processor stubs with lock acquisition / release logic and findById caching. This choice was deliberate:
 
 | Reason | Detail |
 |:---|:---|
@@ -230,164 +249,205 @@ EPC is built by **cloning** `entity-persistence-universal-orchestrator` and repl
 | Same observability | OpenTelemetry trace propagation, request ID headers, and structured logging are pre-wired. |
 | Same configuration model | MicroProfile Config + `application.properties` with env var overrides. |
 
-The only EPC-specific additions on top of the orchestrator template are:
+The EPC-specific additions on top of the orchestrator template are:
 
+**Phase 1 (locking):**
 1. A `LockService` CDI bean (wraps Redisson `RLockReactive`, constructs lock keys from config)
 2. A `ConfigCacheService` CDI bean (Caffeine cache wrapping EPS `/system-info` call)
 3. A `LockKeyBuilder` utility (parses uniqueness/limit scope strings, interpolates field values)
-4. Wiring each create/update PreProcessor to call `lockService.acquireLock(...)` and each PostProcessor to call `lockService.releaseLock(...)`
+4. Wiring each create/update/delete PreProcessor to call `lockService.acquireLock(...)` and each PostProcessor to call `lockService.releaseLock(...)`
+
+**Phase 2 (findById caching):**
+5. A `FindByIdCacheService` CDI bean (Redis-backed by-ID GET response cache; stores response body + selected headers)
+6. Wiring each `GET /{recordType}/{id}` PreProcessor to check `findByIdCacheService.get(cacheKey)` and short-circuit on hit; PostProcessor to call `findByIdCacheService.put(cacheKey, body, headers, ttl)`
+7. Wiring each write PreProcessor (PUT/PATCH/DELETE on `/{id}`) to call `findByIdCacheService.evict(cacheKey)` before forwarding
 
 All routing, proxy, and pass-through logic is inherited unchanged from the template.
 
-The EPC-specific additions on top of the orchestrator template are:
-
-1. A `LockService` CDI bean (wraps Redisson `RLockReactive`, constructs lock keys from config)
-2. A `ConfigCacheService` CDI bean (Caffeine cache wrapping EPS `/system-info` call)
-3. A `LockKeyBuilder` utility (parses uniqueness/limit scope strings, interpolates field values)
-4. A `ResponseCacheService` CDI bean (Redis-backed GET response cache with reverse index and tag index)
-5. A `CacheInvalidationService` CDI bean (pre-emptive invalidation in PreProcessor; see [Invalidation Timing](#invalidation-timing))
-6. A `FilterMatcherPort` utility (in-memory `Where` clause evaluator — Java port of EPS's `FilterMatcher`; used for precise create-time invalidation)
-7. Wiring each create/update/delete **PreProcessor** to call `cacheInvalidationService.invalidateBeforeWrite(...)` and `lockService.acquireLock(...)`, and each **PostProcessor** to call `lockService.releaseLock(...)`
-8. Wiring each GET PreProcessor to check `responseCacheService.get(...)` and short-circuit on hit; GET PostProcessor to call `responseCacheService.put(...)`
-
 ---
 
-## Response Caching
+## Single-Record (findById) Response Caching
 
 ### Purpose and scope
 
-EPC caches the full response body of GET requests in Redis. This covers collection queries (`GET /entities`), single-record fetches (`GET /entities/{id}`), relation traversals (`GET /lists/{id}/entities`), and reaction queries (`GET /entities/{id}/reactions`).
+EPC caches the response body **and selected HTTP response headers** of by-ID GET requests in Redis. This covers:
 
-> **Count queries are not cached.** `GET /entities/count` and equivalent count endpoints are excluded from caching. Count values are invalidated by any create or delete in the collection, giving them the lowest possible cache hit rate in write-active systems. They are also cheap for MongoDB on indexed fields. Caching count results would require the broadest possible invalidation surface for the lowest benefit.
+- `GET /entities/{id}`
+- `GET /lists/{id}`
+- `GET /relations/{id}`
+- `GET /entity-reactions/{id}`
+- `GET /list-reactions/{id}`
 
-**Cache key** is composed of: HTTP method + normalised path + sorted query string.
+Collection queries (`GET /entities`, `GET /lists/{id}/entities`, etc.) are explicitly **not cached**. See [Why Collection Caching Is Not Implemented](#why-collection-caching-is-not-implemented).
 
-```
-BOOKS:epc:cache:GET:/entities?filter[where][_kind]=book&filter[limit]=10
-BOOKS:epc:cache:GET:/entities/abc-123
-BOOKS:epc:cache:GET:/lists/xyz/entities
-```
+> **`filter[include]` bypass:** If the incoming request's query string contains `filter[include]` (or its percent-encoded form `filter%5Binclude%5D`), EPC skips caching entirely for that request — both the read check and the write. The `filter[include]` parameter causes EPS to embed nested related records in the response, making the response body dependent on related data that EPC cannot invalidate correctly. All other query string parameters (including `filter[fields]`, `filter[order]`, `filter[limit]`, `fieldset`) are captured in the cache key.
 
-The query string is an inherently sufficient cache discriminator because the gateway's sets injection encodes the caller's authorized scope directly into it before the request reaches EPC:
-
-- **admin / editor** — no sets injected; all admins/editors see the same full-corpus response for a given query. Sharing one cache entry across all callers of that role is correct.
-- **member** — `set[audience][userIds]={sub}&set[audience][groupIds]={groups}` is injected, making the query string unique per caller identity and group membership.
-- **visitor** — `set[actives]=true&set[publics]=true` is injected (no identity values), since visitors can only see public+active records regardless of who they are. All visitors making the same request share one cache entry, which is correct because their responses are identical.
-
-A separate user-identity dimension in the cache key is therefore not needed and is not part of the design.
-
-### Invalidation timing
-
-**Invalidation happens in the PreProcessor — before forwarding the write to EPS.**
-
-This is a deliberate design decision. The natural place to invalidate is the PostProcessor (after EPS confirms success), but that approach has a critical failure mode: if EPS persists the change and then EPC crashes or loses the connection before the PostProcessor runs, the cache retains stale data indefinitely (until TTL). A crash that occurs after EPS writes but before EPC invalidates leaves no mechanism to recover — the cache has no way to learn that it missed an invalidation.
-
-By invalidating in the PreProcessor — as soon as EPC has decided to allow the request through — we accept a different trade-off: if EPS ultimately rejects the write (409 uniqueness violation, 422 validation error, 429 limit exceeded), the cache entry was evicted unnecessarily and the next read incurs one cache miss. This is a harmless performance cost, not a data integrity issue.
-
-**Why no no-op optimisation for updates:** An intuitive optimisation would be to skip eviction when the incoming PATCH/PUT payload appears to carry the same values as the cached record. This is not implementable correctly at EPC's position in the pipeline. EPS always decorates every persisted write with managed fields regardless of whether the domain data changed — `_lastUpdatedDateTime` is set to `now`, `_version` is always incremented, `_slug` is always regenerated, `_lastUpdatedBy` is always injected from request context. The EPS response is therefore never byte-for-byte equal to the previously cached record even for a genuine no-op update. Stripping managed fields before comparing would require EPC to know the complete and current managed-field list and to reproduce EPS's field-merge logic for partial PATCH documents — a fragile dependency on EPS internals. Additionally, the gateway itself may modify the incoming payload before EPS sees it (e.g. `AddManagedFieldsInCreation`, OPA-driven field injection), so EPC cannot know the final post-decoration payload without intercepting the gateway's own transformation. **Pre-emptive eviction on every allowed write is the correct and only defensible strategy.** The cost is one extra MongoDB read on the next GET after an unnecessary eviction — a bounded, acceptable performance cost on an already-uncommon code path.
-
-### The invalidation problem
-
-When a write is allowed through, cached responses that contain or were derived from the affected record need to be identified and flushed. Three strategies are layered together.
-
-#### Strategy 1 — Short TTL (safety net, always applied)
-
-Every cache entry carries a TTL (default 60s, configurable per record type). Regardless of explicit invalidation, stale entries expire automatically. This is the unconditional backstop.
-
-#### Strategy 2 — Precise reverse-index invalidation (updates and deletes)
-
-When EPC stores a GET response, it builds a *reverse index* in Redis: for each `_id` appearing in the response body, it adds the cache key to a Redis Set keyed by that `_id`.
+### Cache key
 
 ```
-Redis Set  epc:ridx:entity:abc-123  →  { "BOOKS:epc:cache:GET:/entities?...", "BOOKS:epc:cache:GET:/entities/abc-123" }
-Redis Set  epc:ridx:entity:def-456  →  { "BOOKS:epc:cache:GET:/entities?..." }
+{APP_SHORTCODE}:epc:cache:{recordType}:{id}:{sortedQueryString}
+
+e.g.  books:epc:cache:entity:abc-123:                                  (no query params)
+      books:epc:cache:entity:abc-123:fieldset=summary                  (fieldset applied)
+      books:epc:cache:entity:abc-123:filter%5Bfields%5D%5B_name%5D=true (field projection)
 ```
 
-On update or delete of `_id: abc-123` — in the PreProcessor:
-1. Look up `epc:ridx:entity:abc-123`
-2. Delete each listed cache key
-3. Delete the reverse index entry itself
+The key encodes the record type, the immutable `_id`, and the **sorted, normalised query string**. The query string component is required because `GET /{type}/{id}` callers may request different field projections (`filter[fields]`, `fieldset`) that produce different response shapes — these must be cached separately.
 
-This is **precise** — only entries that actually contained the changed record are evicted. Collection entries that didn't include `abc-123` survive untouched.
+> **Field masking and caller identity:** Field masking is applied by the Gateway on the *response path* (after EPS and EPC return), not by EPS. The EPS response body is therefore caller-agnostic for the same query string — all callers using the same field projection get the same EPS response. No user-identity dimension is needed in the cache key.
 
-**Does not apply to creates:** A newly created record has no prior reverse index entry (it didn't exist when any GET was cached).
+**`{APP_SHORTCODE}` resolution in EPC:**
 
-#### Strategy 3 — In-memory filter matching (creates)
+EPC resolves the application shortcode from the `X-App-Shortcode` HTTP header, which the Gateway injects on every proxied request via `spring.cloud.gateway.default-filters: AddRequestHeader=X-App-Shortcode, ${app.shortcode}` (see `entity-persistence-gateway/.context/62-FEATURE-APP-SHORTCODE-PROPAGATION.md`). The header is forwarded by the Orchestrator (if present in the topology) without modification, so EPC always receives the correct value.
 
-When a new record is created, EPC needs to determine which cached collection queries would now return a different result — specifically, queries whose filter the new record satisfies. Rather than flushing all queries of that kind (over-invalidation), EPC evaluates each cached query's stored `where` clause against the incoming record body **in memory**, using a Java port of EPS's [`FilterMatcher`](../../entity-persistence-service/src/extensions/utils/filter-matcher.ts).
+This design keeps `app.shortcode` as a single source of truth in the gateway — EPC does not need its own application shortcode configuration. The header approach is also topology-agnostic: whether the call path is `Gateway → EPC → EPS` or `Gateway → Orchestrator → EPC → EPS`, `X-App-Shortcode` is present at EPC's inbound boundary.
 
-`FilterMatcher` is a complete in-memory LoopBack `Where` clause evaluator already present in EPS. It handles `eq`, `neq`, `gt`/`gte`/`lt`/`lte`, `between`, `inq`, `nin`, `like`/`ilike`/`nlike`, `regexp`, `exists`, and `and`/`or` boolean operators, including array field membership (e.g. matching `_ownerUsers` array against a scalar condition). EPS already uses it in `RecordLimitCheckerService` to determine whether an incoming record falls within a scope without a database round-trip — the same pattern applies here.
+EPC accepts `EPC_APP_SHORTCODE` as a **startup-time fallback** for scenarios where EPC is called directly without a gateway (e.g. migration scripts, administrative tools). When both the header and the env var are present, the header takes precedence.
 
-**How it works:**
+### What is cached
 
-When EPC stores a collection GET response, it stores alongside the cache key the parsed `Where` object extracted from `filter[where]` in the query string:
+EPC caches the full response body plus a selected subset of HTTP response headers. Modelled on the gateway's `DynamicLocalCache` implementation:
+
+| Category | Stored | Notes |
+|:---|:---:|:---|
+| Response body | ✅ | Full JSON body from EPS |
+| `Content-Type` | ✅ | Replayed on cache hit |
+| `ETag` | ✅ | Computed by EPC (MD5 of response body) on first store; replayed on hit |
+| `Cache-Control` | ✅ | Normalised; `max-age` derived from TTL |
+| `X-Cache-Status` | ✅ | Set to `HIT` on cache hit, `MISS` on first population |
+| `X-Request-Id` | ❌ | Not stored — each response gets the caller's own request ID |
+| `Authorization`, `Cookie`, `Set-Cookie` | ❌ | Never stored |
+| Hop-by-hop headers | ❌ | Stripped per HTTP spec |
+
+**Conditional request support:** On a cache hit, EPC evaluates `If-None-Match` (against the stored `ETag`) and returns `304 Not Modified` when the validator matches, avoiding body transmission.
+
+### Cache bypass
+
+EPC honours the same bypass semantics as the Gateway's local cache:
+
+| Client request header | EPC behaviour |
+|:---|:---|
+| `Cache-Control: no-cache` | Skip cache read; fetch from EPS; populate cache with the fresh response |
+| `Cache-Control: no-store` | Skip cache read; fetch from EPS; do **not** write to cache |
+
+These headers allow debugging tools and integration tests to bypass the cache without disabling it globally.
+
+### Invalidation
+
+Invalidation is exact and trivial. Cache key construction uses the same `{APP_SHORTCODE}:epc:cache:{recordType}:{id}:{sortedQueryString}` format, but on write operations the eviction uses a **key-scan pattern** `{APP_SHORTCODE}:epc:cache:{recordType}:{id}:*` — this ensures all cached variants (different field projections) of the same record ID are evicted together.
+
+- **PUT /entities/{id}** (replace) → evict all keys matching `books:epc:cache:entity:{id}:*` in the PreProcessor
+- **PATCH /entities/{id}** (update) → same
+- **DELETE /entities/{id}** → same
+
+On a **POST /entities** (create), no invalidation is needed — the new `_id` has no existing cache entries.
+
+**Bulk write operations (deleteAll / updateAll):**
+
+`DELETE /entities` (deleteAll by filter) and `PATCH /entities` (updateAll by filter) affect an unknown set of records — only a count is returned. The affected `_id`s are unknowable without a pre-fetch round-trip to EPS. EPC does **not** attempt to invalidate findById cache entries for these operations. Cache entries for affected records will be stale until TTL expiry. These are administrative bulk operations where a bounded staleness window is an acceptable trade-off. The TTL backstop is the sole invalidation mechanism for bulk operations. This is a named known limitation.
+
+Invalidation fires in the **PreProcessor** — before the write is forwarded to EPS. If EPS ultimately rejects the write (409, 422, 429), the cache entry was evicted unnecessarily and the next read incurs one extra MongoDB round-trip. This is a harmless performance cost, not a correctness issue.
+
+### Post-eviction stale-read window (known limitation)
+
+Invalidation is pre-emptive (PreProcessor), but a race window exists between eviction and re-population:
 
 ```
-Redis Hash  epc:tagidx:entity:book  →  {
-    "BOOKS:epc:cache:GET:/entities?filter[where][_kind]=book&filter[limit]=10":  {"_kind":"book"},
-    "BOOKS:epc:cache:GET:/entities?filter[where][_kind]=book&filter[where][_name][like]=Gats%": {"_kind":"book","_name":{"like":"Gats%"}},
-    ...
-}
+T1: Writer  — PreProcessor evicts cache key for {id}
+T2: Reader  — PreProcessor: cache miss; forwards GET to EPS
+T3: Writer  — write reaches EPS and commits
+T4: Reader  — PostProcessor: caches the EPS response (which reflects T2's read — pre-T3 state)
+T5: Others  — served the T4-cached stale response until TTL
 ```
 
-On **create** of a new `book` entity (in the PreProcessor, using enriched data available after slug/kind defaults are applied by the gateway):
-1. Retrieve `epc:tagidx:entity:book` (the index for this record type + kind)
-2. For each entry `{cacheKey, whereClause}`, evaluate `FilterMatcher.matches(newRecord, whereClause)`
-3. Evict only the cache keys where the match returns `true`
+This window is structural in any cache-aside system and is not eliminated by pre-emptive eviction. The TTL (configurable, default 60s) is the sole backstop. In practice the window is very narrow (the time between T1 and T3 is the EPS write latency, typically < 50ms over localhost) and the stale response is the previous valid state of the record, not an error.
 
-**Scope boundary:** This in-memory matching applies only to `filter[where]` conditions. Queries that include `filter[set]` clauses (e.g. `set[actives]`, `set[owners][userIds]=...`) require `SetFilterBuilder` resolution to convert into a `Where` object — this is a non-trivial port. For those queries, EPC falls back to tag-based eviction (flush all cached queries for that kind). The tag index stores a flag per entry indicating whether `filter[set]` was present, so the fallback is applied selectively.
+If specific workflows require **read-your-write consistency** (e.g. the writer's own subsequent GET must see the updated record), the recommended mechanism is a `Cache-Control: no-cache` header on the follow-up GET — this forces EPC to bypass the cache read and re-fetch from EPS, then re-populate with the fresh value.
 
-**Result:** Creates only evict cache entries whose stored filter actually matches the new record. A cached query for `filter[where][_name][like]=Gats%` is only evicted if the new record's `_name` matches that pattern. All other cached queries survive.
+### TTL configuration — multi-layer hierarchy
 
-### Invalidation decision matrix
+TTL for findById cache entries is resolved through a three-level hierarchy. The first level that has an explicit value wins:
 
-| Write operation | Strategy used | What is evicted |
-|:---|:---|:---|
-| `POST /entities` (create) | Strategy 3 (in-memory filter match) | Only collection entries whose `where` filter matches the new record; `filter[set]` entries fall back to full kind flush |
-| `PUT /entities/{id}` (replace) | Strategy 2 (reverse index) | Exactly the cache entries that contained `{id}`; plus kind flush if `_kind` or `_ownerUsers` changed |
-| `PATCH /entities/{id}` (update) | Strategy 2 (reverse index) | Exactly the cache entries that contained `{id}`; plus kind flush if `_kind` or `_ownerUsers` changed |
-| `PATCH /entities` (updateAll) | Full kind flush | All cached collection entries for the affected record type + kind (see below) |
-| `DELETE /entities/{id}` | Strategy 2 + kind flush | Reverse index entries for `{id}` + kind-level flush (record no longer exists, collection queries change) |
-| `POST /relations` | Strategy 3 | Collection entries for `_listId` whose filter matches; full flush for `filter[set]` queries |
-| `DELETE /relations/{id}` | Strategy 2 + kind flush | Reverse index entries + `list:{_listId}:members` full flush |
-| `POST /entity-reactions` | Strategy 3 | Collection entries for `_entityId` whose filter matches |
+```
+1. Kind-level   epc.cache.ttl.{recordType}.kinds.{kind}   (most specific)
+2. Type-level   epc.cache.ttl.{recordType}                (e.g. entity, list)
+3. Global       epc.cache.default-ttl                     (fallback for all types)
+```
 
-All invalidation for the same pattern applies symmetrically to `lists`, `list-reactions`, and all `through` endpoints.
+Example resolution for a `GET /entities/{id}` where `_kind=book`:
+1. Check `epc.cache.ttl.entity.kinds.book` → if set, use it
+2. Check `epc.cache.ttl.entity` → if set, use it
+3. Fall back to `epc.cache.default-ttl` (default: 60s)
 
-### `updateAll` invalidation
+This mirrors the configuration hierarchy in the gateway's `DynamicLocalCache` (`app.local-cache.{recordType}.kinds.{kind}.timeToLive` → `app.local-cache.{recordType}.default.timeToLive` → `app.local-cache.default.timeToLive`).
 
-`PATCH /entities` (bulk update) is qualitatively different from single-record writes. EPC receives a `where` filter and a partial update body, but does **not** know which `_id`s are affected — the response is only `{"count": N}`. The reverse index is therefore unusable.
+**Runtime configurability:** TTL values are sourced from MicroProfile Config. When backed by a refreshable config source (e.g. Kubernetes ConfigMap with Quarkus config reload, or Consul), TTL changes take effect on the next cache miss without restarting EPC. Entries already in Redis retain their original TTL — only newly written entries pick up the new value.
 
-Three approaches were considered:
+---
 
-1. **Full kind flush** — evict all cached collection entries for the record type + kind extracted from the `updateAll` `where` clause. Always correct, maximally over-invalidating.
-2. **Reverse filter overlap detection** — for each cached query in the tag index, test whether the `updateAll` `where` clause and the cached query's stored `where` clause can both be satisfied by the same record. Implementable for simple equality conditions but degrades into a constraint satisfaction problem for range conditions, `like`, `inq`, and compound `and/or` trees. Not implementable correctly in the general case.
-3. **Fetch affected `_id`s first** — query EPS for the `_id`s that match the `updateAll` filter before forwarding the update, then use the reverse index. Adds a full round-trip query to every bulk update's critical path; also requires the same auth context to be forwarded, making it fragile.
+## Why Collection Caching Is Not Implemented
 
-**Decision: full kind flush.**
+Collection query responses (`GET /entities?filter[where][_kind]=book&...`) were considered for caching and explicitly rejected. The root cause is a fundamental mismatch: **EPC is a transparent proxy that does not fully understand the LoopBack query language it would need to evaluate for correct invalidation**.
 
-`updateAll` is an administrative bulk operation, not a hot-path single-record mutation. Evicting all cached collection queries for a kind after a bulk update is proportionate — if N records changed simultaneously, invalidating every collection query that could have contained any of them is the correct conservative response. The cache rebuilds on subsequent reads.
+Correct collection cache invalidation requires EPC to answer the question: *"does this cached response need to be evicted because of this write?"* For single-record caches, the answer is trivially `key == {type}:{id}`. For collection caches, the answer requires evaluating the full query — `filter[where]`, `filter[set]`, `filter[include]`, `filter[order]`, `filter[skip]`, `filter[limit]` — against the changed record.
 
-**Kind extraction from the `updateAll` filter:** EPC reads the `filter[where]` query parameter to determine which kinds are affected. If `filter[where][_kind]=book` is present, only the `entity:book` tag is flushed. If no `_kind` condition is present (the update targets all kinds), all kind tags for the record type are flushed. This keeps the flush scoped when the caller has been specific.
+The specific unsolvable problems:
 
-### Why write-path invalidation — not CDC
+### 1. `filter[set]` clauses are not evaluable at EPC's layer
 
-An alternative design would consume MongoDB change events (via Debezium → Redpanda) and invalidate caches reactively. This was considered and rejected:
+The Gateway injects `set` clauses into every request based on the caller's role and identity:
+- **visitor:** `sets[actives]=true&sets[publics]=true`
+- **member:** `sets[owners][userIds]={sub}&sets[audience][groupIds]={groups}`
 
-1. **CDC infrastructure is planned but not yet deployed.** EPC would be undeployable without it.
-2. **EPC already sees every write.** The information needed for invalidation is available synchronously in the PreProcessor without any event bus.
-3. **Pre-emptive invalidation is crash-safe.** CDC-based invalidation can miss events if the consumer is down when the change occurs. Pre-emptive invalidation in the PreProcessor fires before the write reaches EPS, so no crash window exists between write and invalidation.
-4. **Simpler operational model.** No consumer group management, no offset tracking, no reprocessing on consumer restart.
+In practice, the overwhelming majority of production collection queries arrive at EPC with at least one `filter[set]` clause. Each set is a semantic shorthand for a complex `filter[where]` expression — for example, `sets[actives]=true` expands to `_validFromDateTime ≤ now AND (_validUntilDateTime IS NULL OR _validUntilDateTime > now)`. Evaluating these set expressions requires porting EPS's `SetFilterBuilder` to Java and keeping it in parity. This is a significant ongoing maintenance liability with no clean boundary.
 
-CDC-based invalidation remains a valid future enhancement for scenarios where EPC is bypassed (e.g. bulk MongoDB imports, Debezium-sourced migrations).
+Without set evaluation, EPC must fall back to a **full kind flush** on every create for any cached query that included a `set` clause. Because set clauses are present on virtually all non-admin queries, Strategy 3 (precise filter matching) degenerates into full kind flushing for member and visitor traffic — eliminating its only advantage over a simpler design.
 
-### Reverse index TTL management
+### 2. `filter[include]` responses embed nested records
 
-The reverse index sets (`epc:ridx:entity:{_id}`) and tag indexes (`epc:tagidx:entity:{kind}`) must not outlive the cache entries they reference — otherwise they grow unboundedly. EPC manages this by:
+A response to `GET /entities?filter[include][0][relation]=_reactions` contains embedded reaction records. A subsequent reaction write should invalidate this cached parent-entity response. This requires EPC to traverse nested included objects and register secondary reverse-index entries — adding structural complexity and a dependency on EPS's include-response schema.
 
-- Setting the TTL of each reverse index entry to match the TTL of its associated cache key (plus a small buffer, e.g. +10s)
-- Removing index entries during explicit invalidation atomically via a Redis Lua script (delete cache key + remove from reverse index + remove from tag index in one atomic operation)
-- Tag index entries carry the same TTL as their associated cache keys; expired entries are removed lazily on next access
+### 3. Bulk write operations make affected `_id`s unknowable
+
+`PATCH /entities` (updateAll), `PATCH /lists/{id}/entities`, and `DELETE /lists/{id}/entities` affect an unknown set of records. Without a pre-fetch round-trip to EPS (which adds latency and auth-context forwarding complexity), EPC cannot determine which collection cache entries are stale.
+
+### 4. Per-user (member) collection queries have near-zero cache hit rate
+
+The Gateway injects `sets[audience][userIds]={sub}` for member requests, making each member's query string unique. Two requests from different members for `GET /entities` produce different cache keys even if their responses are identical. The collection cache entry for user A is never reusable by user B. Cache hit rate for member traffic is structurally near-zero, making the caching cost (storage, invalidation complexity, stale-data risk) unjustified.
+
+### The correct tool for collection query acceleration
+
+Collection query performance at scale is properly addressed by:
+- **MongoDB indexes** on `_kind`, `_validFromDateTime`, `_visibility`, and compound indexes on common query patterns — already documented in `10_COMPONENT_entity-persistence-service.md`
+- **Meilisearch** (`entity-search-gateway`, planned) — the dedicated search engine in the suite, designed for high-volume read queries with its own indexing and relevance model
+- **Named queries (`?q=`)** — pre-defined, server-side query templates that avoid sending complex filter strings over the wire
+
+---
+
+## Phase 3: Visitor Collection Caching
+
+Visitor traffic (`sets[actives]=true&sets[publics]=true` injected by the Gateway) is the one case where collection caching is viable:
+
+- The query string is **deterministic and role-agnostic** — all visitors making the same request get the same response, so cache entries are fully shareable.
+- The set clause is **static** — `sets[actives]=true&sets[publics]=true` always expands to the same time-window + visibility filter. There is no per-user identity component.
+
+**Phase 3 is committed.** The strategy is **TTL-only invalidation** — no explicit eviction on writes:
+- Cache visitor collection queries with a configurable TTL (default: 30s, via `epc.visitor-cache.ttl`).
+- Accept that a newly created public+active record will not appear in visitor collection responses for up to TTL seconds.
+- Accept that a deleted or deactivated record may remain visible in cached visitor responses for up to TTL.
+- No reverse index, no tag index, no FilterMatcher, no set evaluation.
+
+### Enable flag
+
+Phase 3 caching is gated by a dedicated runtime flag (`epc.visitor-cache.enabled`, default: `false`) so that the code ships with Phase 3 but operators enable it only once they observe visitor collection query load justifying the overhead. Flipping the flag via a refreshable MicroProfile Config source (Kubernetes ConfigMap, Consul) takes effect immediately — no restart required.
+
+### TTL configurability
+
+The visitor collection TTL is sourced from `epc.visitor-cache.ttl` (`EPC_VISITOR_CACHE_TTL`, default: `30s`) via a refreshable MicroProfile Config source. Operators lower the TTL if UX freshness requirements tighten; raise it to reduce MongoDB read load. Changes apply to new cache writes only — existing Redis entries retain their original TTL until expiry.
+
+### Known limitation
+
+The stale window (up to TTL) is a fundamental property of TTL-only invalidation: a newly created, modified, or deactivated record will not be reflected in visitor collection responses until the cache entry expires. This is an accepted trade-off. The TTL backstop is the sole invalidation mechanism for Phase 3 visitor collection cache entries.
 
 ---
 
@@ -398,17 +458,25 @@ The reverse index sets (`epc:ridx:entity:{_id}`) and tag indexes (`epc:tagidx:en
 | `quarkus.http.port` | `QUARKUS_HTTP_PORT` | `3001` | EPC HTTP listen port |
 | `backend.base-url` | `BACKEND_BASE_URL` | `http://localhost:3000` | EPS URL (same pod, localhost) |
 | `backend.system-info-path` | `BACKEND_SYSTEM_INFO_PATH` | `/system-info` | EPS config endpoint path |
+| `epc.app-shortcode` | `EPC_APP_SHORTCODE` | _(none)_ | Fallback app shortcode when `X-App-Shortcode` header is absent (e.g. direct calls without the gateway). Header takes precedence when both are present. |
 | `epc.config-cache.ttl-seconds` | `EPC_CONFIG_CACHE_TTL_SECONDS` | `10` | TTL for in-process `/system-info` cache |
 | `epc.lock.wait-time` | `EPC_LOCK_WAIT_TIME` | `3s` | Max time to wait for a lock before returning 423 |
 | `epc.lock.lease-time` | `EPC_LOCK_LEASE_TIME` | `30s` | Lock TTL in Redis (auto-expires if EPC crashes) |
-| `epc.cache.default-ttl` | `EPC_CACHE_DEFAULT_TTL` | `60s` | Default TTL for all GET response cache entries |
-| `epc.cache.ttl.entity` | `EPC_CACHE_TTL_ENTITY` | _(inherits default)_ | TTL override for entity GET responses |
-| `epc.cache.ttl.list` | `EPC_CACHE_TTL_LIST` | _(inherits default)_ | TTL override for list GET responses |
-| `epc.cache.ttl.relation` | `EPC_CACHE_TTL_RELATION` | _(inherits default)_ | TTL override for relation GET responses |
-| `epc.cache.ttl.entity-reaction` | `EPC_CACHE_TTL_ENTITY_REACTION` | _(inherits default)_ | TTL override for entity-reaction GET responses |
-| `epc.cache.ttl.list-reaction` | `EPC_CACHE_TTL_LIST_REACTION` | _(inherits default)_ | TTL override for list-reaction GET responses |
-| `epc.cache.enabled` | `EPC_CACHE_ENABLED` | `true` | Enable/disable GET response caching globally |
-| `quarkus.redis.hosts` | `QUARKUS_REDIS_HOSTS` | `redis://localhost:6379` | Redis connection URL |
+| `epc.cache.enabled` | `EPC_CACHE_ENABLED` | `true` | Master switch — when `false`, all findById caching is disabled globally; EPC acts as a transparent pass-through for GETs while still acquiring/releasing locks |
+| `epc.cache.default-ttl` | `EPC_CACHE_DEFAULT_TTL` | `60s` | Global fallback TTL for all findById cache entries (level 3 of hierarchy) |
+| `epc.cache.ttl.entity` | `EPC_CACHE_TTL_ENTITY` | _(inherits global default)_ | TTL for entity findById — overrides global default (level 2) |
+| `epc.cache.ttl.entity.kinds.{kind}` | `EPC_CACHE_TTL_ENTITY_KINDS_{KIND}` | _(inherits type TTL)_ | Per-kind TTL override for entities (level 1 — most specific). Example: `EPC_CACHE_TTL_ENTITY_KINDS_BOOK=120s` |
+| `epc.cache.ttl.list` | `EPC_CACHE_TTL_LIST` | _(inherits global default)_ | TTL for list findById (level 2) |
+| `epc.cache.ttl.list.kinds.{kind}` | `EPC_CACHE_TTL_LIST_KINDS_{KIND}` | _(inherits type TTL)_ | Per-kind TTL override for lists (level 1) |
+| `epc.cache.ttl.relation` | `EPC_CACHE_TTL_RELATION` | _(inherits global default)_ | TTL for relation findById (level 2) |
+| `epc.cache.ttl.relation.kinds.{kind}` | `EPC_CACHE_TTL_RELATION_KINDS_{KIND}` | _(inherits type TTL)_ | Per-kind TTL override for relations (level 1) |
+| `epc.cache.ttl.entity-reaction` | `EPC_CACHE_TTL_ENTITY_REACTION` | _(inherits global default)_ | TTL for entity-reaction findById (level 2) |
+| `epc.cache.ttl.entity-reaction.kinds.{kind}` | `EPC_CACHE_TTL_ENTITY_REACTION_KINDS_{KIND}` | _(inherits type TTL)_ | Per-kind TTL override for entity-reactions (level 1) |
+| `epc.cache.ttl.list-reaction` | `EPC_CACHE_TTL_LIST_REACTION` | _(inherits global default)_ | TTL for list-reaction findById (level 2) |
+| `epc.cache.ttl.list-reaction.kinds.{kind}` | `EPC_CACHE_TTL_LIST_REACTION_KINDS_{KIND}` | _(inherits type TTL)_ | Per-kind TTL override for list-reactions (level 1) |
+| `epc.visitor-cache.enabled` | `EPC_VISITOR_CACHE_ENABLED` | `false` | Phase 3 master switch — when `true`, visitor collection GET responses are cached with TTL-only invalidation. Sourced from a refreshable config source; takes effect immediately without restart. |
+| `epc.visitor-cache.ttl` | `EPC_VISITOR_CACHE_TTL` | `30s` | TTL for Phase 3 visitor collection cache entries. Refreshable at runtime — applies to new writes only; existing Redis entries retain their original TTL until expiry. |
+| `quarkus.redis.hosts` | `QUARKUS_REDIS_HOSTS` | `redis://localhost:6379` | Redis connection URL. Use `rediss://` scheme for TLS. Example with auth: `rediss://:password@redis-epc:6380` |
 
 ---
 

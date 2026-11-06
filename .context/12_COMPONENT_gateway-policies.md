@@ -473,6 +473,8 @@ Field definitions live in `policies/fields/data.rego`. The system uses a three-l
 
 Editors cannot forge audit trail fields. They can read everything but cannot write audit metadata.
 
+**Gateway enforcement:** Because `_lastUpdatedBy` is in the editor's `forbidden_update_list`, the gateway's `AddManagedFieldsInPatch` (PATCH) and `AddManagedFieldsFromOriginalToPayloadInReplace` (PUT) filters always **overwrite** any value the editor sends for `_lastUpdatedBy` with the authenticated caller's own identity. Editors cannot preserve a stale value by echoing it.
+
 ### Member
 
 | Operation | Forbidden fields |
@@ -483,9 +485,13 @@ Editors cannot forge audit trail fields. They can read everything but cannot wri
 
 Plus entity/list type-specific additions: `_slug` (create and update).
 
-For **relations**, members additionally cannot update `_entityId`, `_listId`, `_fromMetadata`, `_toMetadata`.  
-For **entityReactions**, members cannot update `_entityId`.  
+For **relations**, members additionally cannot update `_entityId`, `_listId`, `_fromMetadata`, `_toMetadata`.
+For **entityReactions**, members cannot update `_entityId`.
 For **listReactions**, members cannot update `_listId`.
+
+**Gateway enforcement:** Same as editor — `_lastUpdatedBy` is always overwritten with caller identity on PATCH and PUT for members.
+
+**Field-level role exception:** A member or editor holding role `tarcinapp.fields.(records|entities)._lastUpdatedBy.update` has `_lastUpdatedBy` pruned from their `forbidden_update_list` by OPA. The gateway then treats them identically to admin — `putIfAbsent` only — allowing them to express a custom value (e.g. migration scripts, event-consumer service accounts).
 
 ### Visitor (Forbidden Fields — Extended)
 

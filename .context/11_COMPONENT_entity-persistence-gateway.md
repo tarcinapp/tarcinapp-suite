@@ -195,9 +195,15 @@ Two-pass approach:
 4. On PUT (replace): inject original forbidden field values into the replacement payload to prevent accidental deletion.
 
 ### 10. Managed Fields Injection
-**Filters:** `AddManagedFieldsInCreation`, `AddManagedFieldsFromOriginalToPayloadInReplace`  
-On creation: injects `_createdBy` (from JWT `sub`), `_createdDateTime` (now), `_ownerUsers` ([sub]), `_lastUpdatedBy`, `_lastUpdatedDateTime`.  
-On PUT: fetches the original record and merges managed fields from it unless the caller has admin override rights.
+**Filters:** `AddManagedFieldsInCreation`, `AddManagedFieldsInPatch`, `AddManagedFieldsFromOriginalToPayloadInReplace`
+
+**On POST (create):** `AddManagedFieldsInCreation` injects `_createdBy` (JWT `sub`), `_createdDateTime` (now), `_ownerUsers` ([sub]), `_lastUpdatedBy` (JWT `sub`), `_lastUpdatedDateTime` (now) using `putIfAbsent` — callers with rights can supply their own values (e.g. admin backfill).
+
+**On PATCH (update):** `AddManagedFieldsInPatch` injects `_lastUpdatedBy` and `_lastUpdatedDateTime` using a **forbidden-field-aware** strategy:
+- If the field is **forbidden** for this caller (editor / member without a field-level role): always overwrite with the caller's identity / current timestamp, even if they echoed the original value.
+- If the field is **not forbidden** (admin, or caller holding a `tarcinapp.fields.*._lastUpdatedBy.update` role): `putIfAbsent` — only inject when absent; honour any value the caller expressed.
+
+**On PUT (replace):** `AddManagedFieldsFromOriginalToPayloadInReplace` applies the same forbidden-field-aware strategy for `_lastUpdatedBy` and `_lastUpdatedDateTime`, and `putIfAbsent` for `_createdBy`, `_createdDateTime`, and `_ownerUsers` (restoring originals for fields the caller omitted).
 
 ### 11. Sets Injection (Security-Critical)
 **Filters:** `AddSetsToEntityListOrReactionViaRecordQuery`, `AddSetsToRelationQuery`, `AddSetsToReactionsQuery`, `AddSetsToThroughRecordQuery`
@@ -294,8 +300,8 @@ Redis-based distributed locks prevent race conditions in concurrent creates and 
 → See [`entity-persistence-gateway/.context/60-FEATURE-DISTRIBUTED-LOCKING.md`](../../entity-persistence-gateway/.context/60-FEATURE-DISTRIBUTED-LOCKING.md)
 
 ### 18. Local Response Caching
-**Filter:** `DynamicLocalCache`  
-In-memory cache for GET responses. Respects `Cache-Control` headers from EPS. Configurable TTL and max size per route.  
+**Filter:** `DynamicLocalCache`
+In-memory cache for GET responses. Respects `Cache-Control` headers from EPS. Configurable TTL and max size per route. Cache keys are prefixed with `app.shortcode` (`{shortcode}:cache:METHOD:PATH:?sortedQuery:userId`), consistent with all Redis key conventions in the system.
 → See [`entity-persistence-gateway/.context/58-FEATURE-LOCAL-CACHING.md`](../../entity-persistence-gateway/.context/58-FEATURE-LOCAL-CACHING.md)
 
 ### 19. Dynamic Timeout
@@ -310,8 +316,13 @@ Generates a personalized OpenAPI spec at runtime:
 - Prunes fields from schemas based on the caller's `forbiddenFields`
 - Returns the user-specific API surface
 
-Client: `GET /openapi.json` or `GET /openapi.yaml` (with or without Bearer token)  
+Client: `GET /openapi.json` or `GET /openapi.yaml` (with or without Bearer token)
 → See [`entity-persistence-gateway/.context/90-FEATURE-DYNAMIC-OAS-GENERATION.md`](../../entity-persistence-gateway/.context/90-FEATURE-DYNAMIC-OAS-GENERATION.md)
+
+### 21. Application Shortcode Propagation
+**Configuration:** `spring.cloud.gateway.default-filters: AddRequestHeader=X-App-Shortcode, ${app.shortcode}` (built-in filter, no custom class)
+Injects the configured `app.shortcode` value as the `X-App-Shortcode` HTTP header on every proxied request. Enables downstream services (Orchestrator, EPC, EPS) to identify the application deployment context for Redis key namespacing and per-application processor branching. This is the mechanism by which the gateway's single-source-of-truth application identity is propagated to the entire downstream call chain.
+→ See [`entity-persistence-gateway/.context/62-FEATURE-APP-SHORTCODE-PROPAGATION.md`](../../entity-persistence-gateway/.context/62-FEATURE-APP-SHORTCODE-PROPAGATION.md)
 
 ---
 
@@ -344,9 +355,10 @@ Client: `GET /openapi.json` or `GET /openapi.yaml` (with or without Bearer token
 | `ConvertDomainIncludeAliasToGenericRelation` | Transformation | Normalize `filter[include][N][relation]` aliases to generic relations + `_kind` scope |
 | `ProjectDomainIncludeAliasInResponse` | Transformation | Rename generic include fields in response back to alias names |
 | `PlaceKindNameIntoPayload` | Transformation | Inject `"_kind"` into POST/PUT/PATCH body |
-| `AddManagedFieldsInCreation` | Transformation | Inject `_createdBy`, `_ownerUsers`, timestamps on create |
-| `AddManagedFieldsFromOriginalToPayloadInReplace` | Transformation | Preserve managed fields on PUT |
-| `AddForbiddenFieldsFromOriginalToPayloadInReplace` | Transformation | Preserve forbidden fields on PUT |
+| `AddManagedFieldsInCreation` | Transformation | Inject `_createdBy`, `_ownerUsers`, `_lastUpdatedBy`, timestamps on POST (create) |
+| `AddManagedFieldsInPatch` | Transformation | Inject `_lastUpdatedBy` and `_lastUpdatedDateTime` on PATCH (update) with forbidden-field-aware strategy |
+| `AddManagedFieldsFromOriginalToPayloadInReplace` | Transformation | Inject managed fields on PUT (replace) with forbidden-field-aware strategy for audit fields |
+| `AddForbiddenFieldsFromOriginalToPayloadInReplace` | Transformation | Preserve forbidden fields on PUT to prevent blind overwrites |
 | `ConvertSimplerQueriesToBackendFormat` | Transformation | `s=`, `limit=`, `skip=`, `order=` → LoopBack syntax |
 | `ApplyFieldsetConfig` | Transformation | Expand named fieldsets to `filter[fields]` |
 | `FieldFilter` | Transformation | Strip forbidden fields from response body |
@@ -364,7 +376,7 @@ Client: `GET /openapi.json` or `GET /openapi.yaml` (with or without Bearer token
 ```yaml
 app:
   name: my-app                    # spring.application.name
-  shortcode: myapp                # prefix for role names: myapp.admin, myapp.member
+  shortcode: myapp                # prefix for: request IDs, role names, Redis lock/cache keys, X-App-Shortcode header
   inbound:
     address: 0.0.0.0
     port: 8081

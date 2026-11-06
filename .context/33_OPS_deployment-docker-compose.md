@@ -85,7 +85,8 @@ networks:
 
 volumes:
   mongodb_data:
-  redis_data:
+  redis_gateway_data:
+  redis_epc_data:
 
 services:
 
@@ -114,19 +115,56 @@ services:
       start_period: 15s
 
   # ─────────────────────────────────────────────────────────────
-  # Infrastructure: Redis
+  # Infrastructure: redis-gateway
+  # Used by: entity-persistence-gateway
+  # Purpose: distributed locks + rate-limiting counters
+  # Eviction policy: noeviction (lock keys must never be dropped)
+  # Persistence: disabled (lock/counter state is ephemeral)
   # ─────────────────────────────────────────────────────────────
-  redis:
+  redis-gateway:
     image: redis:7-alpine
-    container_name: tarcinapp-redis
+    container_name: tarcinapp-redis-gateway
     networks:
       - tarcinapp
     volumes:
-      - redis_data:/data
+      - redis_gateway_data:/data
     ports:
       - "6379:6379"
-    # If a Redis password is set, add: --requirepass ${REDIS_PASSWORD}
-    command: redis-server --save 60 1
+    command: >
+      redis-server
+      --maxmemory-policy noeviction
+      --save ""
+      --appendonly no
+      ${REDIS_GATEWAY_PASSWORD:+--requirepass ${REDIS_GATEWAY_PASSWORD}}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────
+  # Infrastructure: redis-epc
+  # Used by: entity-persistence-cache (EPC)
+  # Purpose: scope locks + findById response cache
+  # Eviction policy: allkeys-lfu (cache entries are safe to evict)
+  # Persistence: disabled (cache is rebuilt on first read after restart)
+  # ─────────────────────────────────────────────────────────────
+  redis-epc:
+    image: redis:7-alpine
+    container_name: tarcinapp-redis-epc
+    networks:
+      - tarcinapp
+    volumes:
+      - redis_epc_data:/data
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lfu
+      --save ""
+      --appendonly no
+      ${REDIS_EPC_PASSWORD:+--requirepass ${REDIS_EPC_PASSWORD}}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -262,7 +300,7 @@ services:
     depends_on:
       eps:
         condition: service_healthy
-      redis:
+      redis-gateway:
         condition: service_healthy
       opa:
         condition: service_healthy
@@ -293,8 +331,10 @@ services:
       #   -----BEGIN PUBLIC KEY-----
       #   MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
       #   -----END PUBLIC KEY-----
-      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_HOST: redis-gateway
       SPRING_REDIS_PORT: "6379"
+      # SPRING_REDIS_PASSWORD is loaded from .env via env_file above.
+      # Set REDIS_GATEWAY_PASSWORD in .env to enable password auth on redis-gateway.
       # Kind aliases
       APP_KINDALIASPATHS_0_ALIAS: books
       APP_KINDALIASPATHS_0_NAME: book
@@ -408,8 +448,8 @@ compose file. In the full compose above, `orchestrator` and `gui` both declare
 
 | Command | What starts |
 |:---|:---|
-| `docker-compose up -d` | `mongodb`, `redis`, `opa`, `eps`, `gateway` |
-| `docker-compose --profile full up -d` | All services including `orchestrator` and `gui` |
+| `docker-compose up -d` | `mongodb`, `redis-gateway`, `redis-epc`, `opa`, `eps`, `gateway` |
+| `docker-compose --profile full up -d` | All services including `orchestrator`, `epc`, and `gui` |
 
 You can define additional profiles (e.g. `dev`, `monitoring`) and attach them to any service.
 A service with no `profiles` key always starts regardless of which `--profile` flags are used.
@@ -461,10 +501,12 @@ Services address each other using their Compose service names as DNS hostnames:
 | Service name | Role | Internal health endpoint |
 |:---|:---|:---|
 | `mongodb` | MongoDB | — (mongosh ping) |
-| `redis` | Redis | — (redis-cli ping) |
+| `redis-gateway` | Redis for Gateway | — (redis-cli ping) |
+| `redis-epc` | Redis for EPC | — (redis-cli ping) |
 | `opa` | OPA policy engine | `http://opa:8181/health` |
 | `eps` | entity-persistence-service | `http://eps:3000/ping` |
 | `orchestrator` | universal orchestrator | `http://orchestrator:8079/q/health/ready` |
+| `epc` | entity-persistence-cache | `http://epc:3001/q/health/ready` |
 | `gateway` | entity-persistence-gateway | `http://gateway:8081/actuator/health/readiness` |
 | `gui` | tarcinapp-base-gui | `http://gui:80` |
 
@@ -475,10 +517,12 @@ Services with published `ports` are accessible at `http://localhost:{port}`:
 | Service | Host URL |
 |:---|:---|
 | MongoDB | `localhost:27017` |
-| Redis | `localhost:6379` |
+| redis-gateway | `localhost:6379` |
+| redis-epc | `localhost:6380` |
 | OPA | `http://localhost:8181` |
 | EPS | `http://localhost:3000` |
 | Orchestrator | `http://localhost:8079` |
+| EPC | `http://localhost:3001` |
 | Gateway | `http://localhost:8081` |
 | GUI | `http://localhost:80` |
 
@@ -495,11 +539,13 @@ container, but any **client-side** API calls from the browser must target `http:
 ## Startup Order
 
 ```
-mongodb ──────────────────→ eps ──→ orchestrator ──→ gateway ──→ gui
-                              ↑
-redis ────────────────────────┼──────────────────────────────→ gateway
-                              │
-opa ──────────────────────────┘──────────────────────────────→ gateway
+mongodb ──────────────────→ eps ──→ orchestrator ──→ epc ──→ gateway ──→ gui
+                               ↑                       ↑
+redis-gateway ─────────────────┼───────────────────────┼──────────────→ gateway
+                               │                       │
+redis-epc ─────────────────────┼───────────────────────┘
+                               │
+opa ───────────────────────────┘──────────────────────────────────────→ gateway
 ```
 
 The `depends_on` + `condition: service_healthy` directives enforce this order. Each service

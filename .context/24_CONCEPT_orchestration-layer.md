@@ -87,22 +87,47 @@ Before the request reaches the orchestrator, the Gateway injects a set of standa
 | `X-Request-Id` | Gateway-generated | A unique ID for this request (useful for correlation logging) |
 | `X-User-Roles` | JWT roles claim | Comma-separated list of role names (e.g. `"user,admin"`) |
 | `X-User-Groups` | JWT groups claim | Comma-separated list of group names |
-| `X-App-Shortcode` | Gateway config | The shortcode of the gateway app (e.g. `"myapp"`) |
+| `X-App-Shortcode` | Gateway config (`app.shortcode`) | The shortcode of the application deployment (e.g. `"books"`, `"myapp"`). Injected by the `InjectAppShortcodeHeader` gateway filter on every proxied request. |
 
-**Example — reading gateway-injected headers in a processor:**
+**`X-App-Shortcode` — intended uses in processors:**
+
+1. **Redis key namespacing.** All Redis keys in the Tarcinapp suite are prefixed with the application shortcode to prevent collision when multiple applications share a Redis cluster. When a processor acquires its own Redis locks or writes custom cache entries, it must use this value as the prefix:
+
+   ```java
+   String shortcode = exchange.getIn().getHeader("X-App-Shortcode", String.class);
+   // Correct pattern — consistent with gateway lock keys and EPC cache keys
+   String lockKey   = shortcode + ":custom:lock:" + someId;
+   String cacheKey  = shortcode + ":custom:cache:" + someId;
+   ```
+
+2. **Per-application branching.** When a single orchestrator deployment serves multiple applications, `X-App-Shortcode` is the discriminator for routing to application-specific logic:
+
+   ```java
+   String shortcode = exchange.getIn().getHeader("X-App-Shortcode", String.class);
+   if ("books".equals(shortcode)) {
+       // books-specific enrichment
+   } else if ("music".equals(shortcode)) {
+       // music-specific enrichment
+   }
+   ```
+
+3. **Forwarding to EPC and EPS.** The Camel HTTP component forwards all received headers — including `X-App-Shortcode` — to EPC and EPS automatically via `bridgeEndpoint=true`. No explicit forwarding code is needed. EPC reads this header to namespace its own lock keys and findById cache keys.
+
+**Example — reading all gateway-injected headers in a processor:**
 
 ```java
 @ApplicationScoped
 public class CreateEntityPreProcessor implements Processor {
     @Override
     public void process(Exchange exchange) throws Exception {
-        String userId    = exchange.getIn().getHeader("X-User-Id",      String.class);
-        String requestId = exchange.getIn().getHeader("X-Request-Id",   String.class);
-        String roles     = exchange.getIn().getHeader("X-User-Roles",   String.class);
-        String groups    = exchange.getIn().getHeader("X-User-Groups",  String.class);
+        String userId    = exchange.getIn().getHeader("X-User-Id",       String.class);
+        String requestId = exchange.getIn().getHeader("X-Request-Id",    String.class);
+        String roles     = exchange.getIn().getHeader("X-User-Roles",    String.class);
+        String groups    = exchange.getIn().getHeader("X-User-Groups",   String.class);
         String shortcode = exchange.getIn().getHeader("X-App-Shortcode", String.class);
 
-        // Use these for enrichment, access checks, or logging
+        // Namespace Redis keys with application identity
+        String lockKey = shortcode + ":custom:lock:" + exchange.getIn().getHeader("recordId", String.class);
     }
 }
 ```

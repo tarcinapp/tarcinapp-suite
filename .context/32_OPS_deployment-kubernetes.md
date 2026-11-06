@@ -25,13 +25,14 @@ kubectl create namespace tarcinapp
 | `entity-persistence-universal-orchestrator` | custom build | `8079` | 1+ | Stateless Quarkus app; scales freely — Camel routes are thread-safe by default with CDI singleton processors |
 | `tarcinapp-base-gui` | nginx serving dist/ | `80` | 1+ | Static assets; scales freely |
 | `mongodb` | `mongo:7` | `27017` | 1 (dev) / operator or Atlas (prod) | See MongoDB production notes |
-| `redis` | `redis:7-alpine` | `6379` | 1 (dev) / Sentinel or Cluster (prod) | See Redis production notes |
+| `redis-gateway` | `redis:7-alpine` | `6379` | 1 (dev) / Sentinel or Cluster (prod) | Gateway-exclusive Redis: distributed locks + rate-limiting counters. `noeviction` policy. See Redis notes. |
+| `redis-epc` | `redis:7-alpine` | `6380` | 1 (dev) / Sentinel or Cluster (prod) | EPC-exclusive Redis: scope locks + findById cache. `allkeys-lfu` policy. See Redis notes. |
 
 ### Statelessness and Horizontal Scaling
 
 **EPS (entity-persistence-service):** Fully stateless. All persistent state lives in MongoDB. You can freely increase `replicas` behind a Service without any shared-memory or sticky-session concerns.
 
-**Gateway (entity-persistence-gateway):** Fully stateless per request. Session/rate-limit counters are stored in Redis (shared across all replicas), so multiple gateway replicas all point to the same `redis-service`. Increase `replicas` freely.
+**Gateway (entity-persistence-gateway):** Fully stateless per request. Session/rate-limit counters are stored in `redis-gateway` (shared across all replicas), so multiple gateway replicas all point to the same `redis-gateway-service`. Increase `replicas` freely.
 
 **Orchestrator (entity-persistence-universal-orchestrator):** Fully stateless. Apache Camel routes run inside CDI singleton processor beans; by default each route invocation is independent and thread-safe. No shared mutable state between requests. Increase `replicas` freely.
 
@@ -76,9 +77,6 @@ Create Kubernetes Secrets for all sensitive values. Never embed these in ConfigM
 
 ```bash
 # JWT RS256 public key for the gateway
-# The gateway currently only supports static RS256 public key verification.
-# There is no JWKS endpoint polling / Keycloak discovery endpoint support.
-# The key must be pre-configured here and mounted into the gateway container.
 kubectl create secret generic gateway-auth-secret \
   --from-file=rs256PublicKey=./certs/public.pem \
   -n tarcinapp
@@ -89,10 +87,20 @@ kubectl create secret generic mongodb-secret \
   --from-literal=password=SecurePass123! \
   -n tarcinapp
 
-# Redis password
-kubectl create secret generic redis-secret \
-  --from-literal=password=RedisPass123! \
+# redis-gateway password (used by the Gateway for locks and rate-limiting)
+kubectl create secret generic redis-gateway-secret \
+  --from-literal=password=RedisGatewayPass123! \
   -n tarcinapp
+
+# redis-epc password (used by EPC for scope locks and findById cache)
+# Also create the TLS certificate secret if TLS is enabled on redis-epc:
+kubectl create secret generic redis-epc-secret \
+  --from-literal=password=RedisEpcPass123! \
+  -n tarcinapp
+# Optional TLS — mount the CA cert so EPC can verify the redis-epc server certificate:
+# kubectl create secret generic redis-epc-tls \
+#   --from-file=ca.crt=./certs/redis-epc-ca.crt \
+#   -n tarcinapp
 ```
 
 ### OIDC Discovery vs. Static Public Key
@@ -188,7 +196,11 @@ data:
   APP_OPA_PORT: "8181"
   APP_AUTH_ISSUER: "https://auth.example.com/realms/myapp"
   APP_AUTH_CLOCKSKEWSECONDS: "60"
-  SPRING_REDIS_HOST: "redis-service"
+  # Gateway uses its own dedicated Redis instance (redis-gateway).
+  # This instance holds distributed locks and rate-limiting counters only.
+  # Eviction policy: noeviction — lock keys must never be silently dropped.
+  # Persistence: disabled (no RDB/AOF) — lock/counter state does not survive restarts.
+  SPRING_REDIS_HOST: "redis-gateway-service"
   SPRING_REDIS_PORT: "6379"
   # Logging levels (package-level control for Tarcinapp internals and infrastructure)
   APP_LOGGING_TARCINAPP: "INFO"    # Root log level for com.tarcinapp.* classes
@@ -331,7 +343,7 @@ spec:
             - name: SPRING_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: redis-secret
+                  name: redis-gateway-secret
                   key: password
           readinessProbe:
             httpGet:
@@ -553,15 +565,33 @@ spec:
       targetPort: 8079
   type: ClusterIP
 ---
-# Redis Service — ClusterIP, internal only
+# redis-gateway Service — ClusterIP, internal only
+# Used by: entity-persistence-gateway (distributed locks, rate-limiting)
+# Eviction policy: noeviction | Persistence: disabled
 apiVersion: v1
 kind: Service
 metadata:
-  name: redis-service
+  name: redis-gateway-service
   namespace: tarcinapp
 spec:
   selector:
-    app: redis
+    app: redis-gateway
+  ports:
+    - port: 6379
+      targetPort: 6379
+  type: ClusterIP
+---
+# redis-epc Service — ClusterIP, internal only
+# Used by: entity-persistence-cache (scope locks, findById response cache)
+# Eviction policy: allkeys-lfu | Persistence: disabled
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-epc-service
+  namespace: tarcinapp
+spec:
+  selector:
+    app: redis-epc
   ports:
     - port: 6379
       targetPort: 6379
@@ -781,21 +811,57 @@ A single MongoDB pod without a persistent volume and backup is **not suitable fo
 
 ### Redis
 
-A single Redis pod is a single point of failure. For production:
+The Tarcinapp suite uses **two separate Redis instances** with different purposes and eviction policies. They must never be merged into a single instance, as their requirements conflict:
 
-1. **Redis Sentinel** — 1 primary + 2 replicas + 3 Sentinel processes. Spring Boot connects via the Sentinel endpoint; failover is automatic. Use the `bitnami/redis` Helm chart with `architecture: replication` and `sentinel.enabled: true`.
+| Instance | Service name | Consumer | Purpose | Eviction policy | Persistence |
+|:---|:---|:---|:---|:---|:---|
+| `redis-gateway` | `redis-gateway-service:6379` | entity-persistence-gateway | Distributed locks, rate-limiting counters | `noeviction` | Disabled |
+| `redis-epc` | `redis-epc-service:6379` | entity-persistence-cache | Scope locks, findById response cache | `allkeys-lfu` | Disabled |
 
-2. **Redis Cluster** — Sharded mode for horizontal write scaling. More complex to operate; use when a single Redis primary is a throughput bottleneck.
+**Why separate instances?**
+Lock keys must never be silently evicted — if a lock disappears while held, the protected region loses serialisation guarantees. Cache entries are safe to evict under memory pressure. These requirements are mutually exclusive: `noeviction` prevents cache cleanup, while LRU/LFU risks silently dropping live lock keys. Two instances with separate `maxmemory` and `maxmemory-policy` settings is the only clean solution.
 
-3. **Managed Redis** — AWS ElastiCache, GCP Memorystore, or Azure Cache for Redis. Reduces operational burden; configure `SPRING_REDIS_HOST` to the managed endpoint.
+**Why no persistence on either instance?**
+Neither Redis instance holds data that must survive a restart:
+- `redis-gateway` holds lock keys (auto-expire via `lease-time`) and rate-limit counters (rolling windows). Stale counters after restart cause at most one window of incorrect rate-limit accounting — acceptable.
+- `redis-epc` holds lock keys (same reasoning) and cache entries (TTL-bounded, rebuilt on first read after restart). A cold cache after restart is operationally fine.
+RDB and AOF are therefore disabled on both instances. This also eliminates persistence I/O overhead.
+
+**HA topology options (apply to each instance independently):**
+
+1. **Redis Sentinel** — 1 primary + 2 replicas + 3 Sentinel processes. Automatic failover; use the `bitnami/redis` Helm chart with `architecture: replication` and `sentinel.enabled: true`. Recommended for most deployments.
+
+2. **Redis Cluster** — Sharded mode for horizontal write scaling. More complex to operate; use when a single Redis primary is a throughput bottleneck (unlikely for lock workloads at normal scale).
+
+3. **Managed Redis** — AWS ElastiCache, GCP Memorystore, or Azure Cache for Redis. Reduces operational overhead. Configure `SPRING_REDIS_HOST` / `QUARKUS_REDIS_HOSTS` to the managed endpoint.
+
+**TLS:** Both instances should use TLS in production. For `redis-epc`, configure `QUARKUS_REDIS_HOSTS=rediss://:password@redis-epc-service:6380`. For `redis-gateway`, configure the Redisson client in the Gateway to use `rediss://` as well. Mount a CA certificate Secret if using a self-signed or private CA.
 
 ```bash
-# Example: Bitnami Redis Helm chart with Sentinel
+# Example: deploy redis-gateway with Bitnami Helm chart (noeviction, no persistence)
 helm repo add bitnami https://charts.bitnami.com/bitnami
-helm install redis bitnami/redis \
+helm install redis-gateway bitnami/redis \
   --set architecture=replication \
   --set sentinel.enabled=true \
-  --set auth.password=RedisPass123! \
+  --set auth.password=RedisGatewayPass123! \
+  --set master.extraFlags[0]="--maxmemory-policy noeviction" \
+  --set master.extraFlags[1]="--save ''" \
+  --set replica.extraFlags[0]="--maxmemory-policy noeviction" \
+  --set replica.extraFlags[1]="--save ''" \
+  -n tarcinapp
+
+# Example: deploy redis-epc with Bitnami Helm chart (allkeys-lfu, no persistence)
+# Set --maxmemory based on estimated cache footprint: #records × avg_record_bytes × 2
+helm install redis-epc bitnami/redis \
+  --set architecture=replication \
+  --set sentinel.enabled=true \
+  --set auth.password=RedisEpcPass123! \
+  --set master.extraFlags[0]="--maxmemory 512mb" \
+  --set master.extraFlags[1]="--maxmemory-policy allkeys-lfu" \
+  --set master.extraFlags[2]="--save ''" \
+  --set replica.extraFlags[0]="--maxmemory 512mb" \
+  --set replica.extraFlags[1]="--maxmemory-policy allkeys-lfu" \
+  --set replica.extraFlags[2]="--save ''" \
   -n tarcinapp
 ```
 
@@ -809,10 +875,14 @@ helm install redis bitnami/redis \
 | Gateway | 512Mi | 1Gi | 250m | 1000m |
 | OPA (sidecar) | 64Mi | 256Mi | 50m | 200m |
 | Orchestrator | 256Mi | 512Mi | 100m | 500m |
-| Redis | 128Mi | 512Mi | 50m | 200m |
+| redis-gateway | 64Mi | 128Mi | 50m | 100m |
+| redis-epc | 128Mi | 512Mi | 50m | 200m |
+| EPC | 256Mi | 512Mi | 100m | 500m |
 | MongoDB | 1Gi | 4Gi | 500m | 2000m |
 
-> These are starting recommendations. Tune based on observed usage with `kubectl top pods`.
+> `redis-gateway` footprint is small — only lock keys and rate-limit counters, both short-lived.
+> `redis-epc` limit should be set to match the `--maxmemory` value configured on the Redis instance itself.
+> Tune all values based on observed usage with `kubectl top pods`.
 
 ---
 
