@@ -102,6 +102,25 @@ Gateway Response
 
 ---
 
+## Redis Infrastructure
+
+EPC requires its own dedicated Redis instance (`redis-epc`), separate from the Gateway's Redis (`redis-gateway`). The two instances have conflicting eviction requirements and must never be merged.
+
+| Instance | Consumer | Purpose | Eviction policy | Persistence |
+|:---|:---|:---|:---|:---|
+| `redis-gateway` | entity-persistence-gateway | Distributed locks, rate-limiting counters | `noeviction` | Disabled |
+| `redis-epc` | entity-persistence-cache | Scope locks, findById response cache | `allkeys-lfu` | Disabled |
+
+**Why separate instances:** Lock keys must never be evicted while held — `noeviction` is required for `redis-gateway`. Cache entries are safe to evict under memory pressure — LFU is optimal for `redis-epc`. These policies are mutually exclusive on a single instance.
+
+**Why persistence is disabled on both:** Lock keys auto-expire via `lease-time`; a lock key surviving a Redis restart would be stale. Cache entries rebuild on first read after a restart — a cold cache is operationally acceptable. Disabling persistence also eliminates RDB/AOF I/O overhead.
+
+**Sentinel HA — Option B (deployment-time config):** Application source files (`application.properties`, `app-outbound.yml`) remain configured for single-node Redis. Sentinel connection config (`SPRING_DATA_REDIS_SENTINEL_MASTER`, `SPRING_DATA_REDIS_SENTINEL_NODES` for the Gateway; equivalent Quarkus sentinel properties for EPC) is supplied entirely at deployment time via Kubernetes ConfigMap / Secret or `docker-compose` `.env` overrides. No application code change is required to switch from single-node to Sentinel. Full documentation in `entity-persistence-gateway/.context/63-FEATURE-REDIS-SENTINEL-CONFIGURATION.md`. Integration tests continue to use single-node Redis.
+
+**`maxmemory` sizing for `redis-epc`:** Estimate as `#active_records × avg_record_bytes × 2`. Set via `--maxmemory` flag at deployment time. See `32_OPS_deployment-kubernetes.md` for Helm command examples.
+
+---
+
 ## Configuration Source: EPS `/system-info`
 
 EPC derives its lock key dimensions by reading the uniqueness and record-limit configuration directly from EPS's `/system-info` endpoint. EPS exposes its fully resolved configuration there — no database round-trip, pure in-memory serialisation.
@@ -304,6 +323,22 @@ This design keeps `app.shortcode` as a single source of truth in the gateway —
 
 EPC accepts `EPC_APP_SHORTCODE` as a **startup-time fallback** for scenarios where EPC is called directly without a gateway (e.g. migration scripts, administrative tools). When both the header and the env var are present, the header takes precedence.
 
+### Cached HTTP status codes
+
+EPC caches responses with the following HTTP status codes:
+
+| Status | Cached | Rationale |
+|:---|:---:|:---|
+| `200 OK` | ✅ | Normal found response |
+| `404 Not Found` | ✅ | Negative cache — prevents repeated MongoDB lookups for non-existent IDs (polling patterns) |
+| All other 4xx / 5xx | ❌ | Transient or caller-specific errors; must not be replayed |
+
+**POST evicts cached 404 on create:** When a `POST /{type}` response contains a `_id` field in the response body, EPC issues a wildcard DEL for `{APP_SHORTCODE}:epc:cache:{type}:{newId}:*`. This evicts any previously cached 404 for that ID so the next `GET /{type}/{newId}` fetches the newly created record from EPS.
+
+### Cache key versioning
+
+No version segment is included in the key format. A cache schema change cold-starts the cache by flushing `redis-epc` at deploy time (acceptable — cache rebuilds on first read). FLUSHDB during deployment is simpler than a version-segment bump mechanism.
+
 ### What is cached
 
 EPC caches the full response body plus a selected subset of HTTP response headers. Modelled on the gateway's `DynamicLocalCache` implementation:
@@ -363,6 +398,24 @@ T5: Others  — served the T4-cached stale response until TTL
 This window is structural in any cache-aside system and is not eliminated by pre-emptive eviction. The TTL (configurable, default 60s) is the sole backstop. In practice the window is very narrow (the time between T1 and T3 is the EPS write latency, typically < 50ms over localhost) and the stale response is the previous valid state of the record, not an error.
 
 If specific workflows require **read-your-write consistency** (e.g. the writer's own subsequent GET must see the updated record), the recommended mechanism is a `Cache-Control: no-cache` header on the follow-up GET — this forces EPC to bypass the cache read and re-fetch from EPS, then re-populate with the fresh value.
+
+### Concurrency and thundering herd
+
+**Thundering herd:** When a hot record's TTL expires, concurrent readers all forward simultaneously to EPS. For findById this is low severity — single-record reads are cheap and MongoDB handles parallel by-ID reads efficiently. No request coalescing is implemented in Phase 2. If post-deployment metrics show a problematic burst rate on the same key, add `SETNX`-based coalescing as a follow-on.
+
+**Lock acquisition — non-blocking requirement:** All lock operations use `RLockReactive.tryLockAsync(waitTime, leaseTime, TimeUnit)`. Blocking `tryLock` must **never** be called on a Vert.x event-loop thread (inherited from the Quarkus Reactive / Vert.x runtime). All lock operations must remain on the reactive pipeline. Default: `waitTime=3s`, `leaseTime=30s`.
+
+**Write operation ordering in PreProcessor:** The required order is strictly:
+1. Evict findById cache entry (`DEL` wildcard)
+2. Acquire scope lock
+3. Forward write to EPS
+
+Reversing steps 1 and 2 creates a window where a concurrent reader re-populates the cache with a stale response between lock acquisition and write completion.
+
+**Redis unavailability:**
+- **Locks** — fail fast, return `503 Service Unavailable`. Lock acquisition is required for correctness; degrading silently would allow TOCTOU races.
+- **findById cache** — degrade gracefully, pass GET through to EPS without caching. Cache is a performance optimisation, not a correctness requirement.
+- A **Resilience4j circuit breaker** wraps all Redis calls to prevent cascading latency under slow-Redis conditions.
 
 ### TTL configuration — multi-layer hierarchy
 
@@ -448,6 +501,57 @@ The visitor collection TTL is sourced from `epc.visitor-cache.ttl` (`EPC_VISITOR
 ### Known limitation
 
 The stale window (up to TTL) is a fundamental property of TTL-only invalidation: a newly created, modified, or deactivated record will not be reflected in visitor collection responses until the cache entry expires. This is an accepted trade-off. The TTL backstop is the sole invalidation mechanism for Phase 3 visitor collection cache entries.
+
+---
+
+## Observability
+
+### Metrics (Micrometer)
+
+All counters carry a `record_type` tag (`entity`, `list`, `relation`, `entity-reaction`, `list-reaction`).
+
+| Metric | Type | Additional tags | Description |
+|:---|:---|:---|:---|
+| `epc.cache.hit` | Counter | `record_type` | findById cache hit |
+| `epc.cache.miss` | Counter | `record_type` | findById cache miss |
+| `epc.cache.put` | Counter | `record_type`, `status: [200, 404]` | Entry written to cache |
+| `epc.cache.evict` | Counter | `record_type`, `trigger: [write_single, write_delete, write_bulk_noop, ttl_expired, bypass]` | Entry evicted. `write_bulk_noop` is incremented on updateAll/deleteAll to surface the known-limitation in metrics even though no actual eviction occurs |
+| `epc.cache.conditional_hit` | Counter | `record_type` | `If-None-Match` matched stored ETag → 304 returned |
+| `epc.lock.acquired` | Counter | `lock_type: [uniqueness, limit, global]` | Lock acquired successfully |
+| `epc.lock.released` | Counter | `lock_type` | Lock released |
+| `epc.lock.timeout` | Counter | `lock_type` | Lock wait exceeded `wait-time` → 423 |
+| `epc.lock.wait_time` | Histogram | `lock_type` | Time spent waiting to acquire lock |
+| `epc.lock.held_time` | Histogram | `lock_type` | Time lock was held (acquisition to release) |
+
+### Alerting thresholds
+
+| Condition | Severity | Notes |
+|:---|:---|:---|
+| findById cache hit rate < 50% over 5 min | Warn | Baseline may need adjustment post-deployment |
+| Lock timeout rate > 1% over 1 min | Critical | Indicates contention or Redis latency |
+| Redis connection errors > 0 over 1 min | Critical | |
+| `epc.cache.evict` rate spikes 10× 15-min baseline over 1 min | Warn | Possible bulk import bypassing EPC |
+
+### Structured logging
+
+JSON structured logging. MDC field `requestId` is populated from the inbound `X-Request-Id` header (set by the Gateway, forwarded by the Orchestrator). EPC does **not** generate its own request IDs.
+
+| Event | Level | When |
+|:---|:---|:---|
+| `CACHE_HIT` | DEBUG | findById served from cache |
+| `CACHE_MISS` | DEBUG | findById forwarded to EPS |
+| `CACHE_BYPASS` | DEBUG | `Cache-Control: no-cache` or `no-store` received |
+| `CACHE_CONDITIONAL_HIT` | DEBUG | `If-None-Match` matched → 304 |
+| `CACHE_EVICT` | INFO | Cache entry evicted (write path) |
+| `CACHE_PUT` | DEBUG | Cache entry written |
+| `LOCK_ACQUIRED` | DEBUG | Scope lock acquired |
+| `LOCK_RELEASED` | DEBUG | Scope lock released |
+| `LOCK_TIMEOUT` | WARN | Lock wait exceeded threshold → 423 |
+| `REDIS_UNAVAILABLE` | ERROR | Redis connection failed |
+
+### OpenTelemetry
+
+Span events added to the Camel route span: `cache.hit`, `cache.miss`, `cache.bypass`, `cache.conditional_hit`, `lock.acquired`, `lock.released`. Lock keys are stored as **truncated/hashed** span attributes — never raw. No auth tokens, user IDs, or record body content in span attributes (KVKK compliance).
 
 ---
 
