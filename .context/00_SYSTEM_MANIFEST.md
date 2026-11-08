@@ -117,9 +117,10 @@ Tarcinapp is a comprehensive architectural framework composed of six logical lay
     * `entity-persistence-gateway-policies` ✅: The **OPA-based** policy repository containing the Rego logic for authorization and field redaction.
 
 ### IV. Orchestration Layer *(partially implemented)*
-* **Role:** The "Brain" and Business Logic Execution Layer. It sits between the Gateway and the Data Layer to manage complex workflows, data aggregation, and asynchronous tasks. This is where domain-specific logic is implemented by AI agents.
+* **Role:** The "Brain" and Business Logic Execution Layer. It sits between the Gateway and the Data Layer to manage complex workflows, payload normalization, data aggregation, and asynchronous tasks. This is where domain-specific logic is implemented by AI agents.
 * **Key Components:**
-    * `entity-persistence-universal-orchestrator` ✅: The primary microservice template and a blueprint for defining main business workflows and complex orchestrations. Domain-specific development happens based on cloning this repository.
+    * `entity-persistence-base-orchestrator` ✅: **The active payload normalization service (EPBO).** Sits between the Gateway and EPC in the live request chain (`EPG → EPBO → EPC → EPS`). Responsible for computing and injecting managed fields (`_kind` default, `_visibility`, `_validFromDateTime`, `_validUntilDateTime` null-coercion, `_slug`) before requests reach EPC. Stateless in-memory computation — no Redis dependency. Default port **:3002**. Cloned from `entity-persistence-universal-orchestrator`.
+    * `entity-persistence-universal-orchestrator` ✅: The primary microservice **template** and blueprint for defining custom business workflows and complex orchestrations. Domain-specific development happens by cloning this repository. **Not part of the runtime request chain** — EPBO is the active service in Layer IV.
     * `entity-persistence-bff-orchestrator` *(planned)*: A specialized Camel Quarkus application acting as a **Page Aggregator**. It aggregates and shapes data specifically for the User Interface.
     * `entity-persistence-work-queue-bus` (RabbitMQ) *(infrastructure — deployed RabbitMQ instance)*: The message broker managing asynchronous work queues within the orchestration layer, decoupling heavy tasks from the request loop.
     * `entity-search-indexer` *(planned)*: A specialized orchestrator that consumes data changes from Redpanda and writes them into **Meilisearch** indexes, ensuring search data is up-to-date.
@@ -197,8 +198,8 @@ end
 %% 4. ORCHESTRATION
 subgraph Orch_Layer [3. Orchestration Layer]
     direction LR
+    EPBO[entity-persistence-base-orchestrator :3002]:::component
     BFF[BFF Orchestrator]:::component
-    UO[Universal Orchestrator]:::component
     S3O[S3 Orchestrator]:::component
     RMQ[RabbitMQ]:::component
     SIO[Search Indexer]:::component
@@ -232,11 +233,11 @@ Nginx -->|/search| SGW
 UIS -->|SSR Data| BFF
 
 %% ===== GATEWAY → ORCHESTRATION =====
-TGW --> UO
+TGW --> EPBO
 SGW --> MS
 
 %% ===== ORCHESTRATION → DATA =====
-UO --> QA --> BE --> DB
+EPBO --> QA --> BE --> DB
 S3O -->|File Ops| S3
 SIO --> MS
 

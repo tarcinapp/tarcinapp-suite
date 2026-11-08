@@ -55,53 +55,6 @@ This is the master configuration reference for all Tarcinapp services. Variables
 | `ENTITY_REACTION_KINDS` | string | _(any)_ | Allowed kinds for entity reactions. Example: `like,comment,rating,flag,review` |
 | `LIST_REACTION_KINDS` | string | _(any)_ | Allowed kinds for list reactions. |
 
-### Default Kinds
-| Env var | Type | Default | Description |
-|:---|:---|:---|:---|
-| `DEFAULT_ENTITY_KIND` | string | `entity` | Default `_kind` applied when not specified for entities |
-| `DEFAULT_LIST_KIND` | string | `list` | Default `_kind` for lists |
-| `DEFAULT_RELATION_KIND` | string | `list-entity-relation` | Default kind for relations |
-| `DEFAULT_ENTITY_REACTION_KIND` | string | `entity-reaction` | Default kind for entity reactions |
-| `DEFAULT_LIST_REACTION_KIND` | string | `list-reaction` | Default kind for list reactions |
-
-### Auto Approve
-| Env var | Type | Default | Description |
-|:---|:---|:---|:---|
-| `AUTOAPPROVE_ENTITY` | boolean | `false` | Auto-set `_validFromDateTime=now` on entity create |
-| `AUTOAPPROVE_LIST` | boolean | `false` | Auto-approve lists |
-| `AUTOAPPROVE_ENTITY_REACTION` | boolean | `false` | Auto-approve entity reactions |
-| `AUTOAPPROVE_LIST_REACTION` | boolean | `false` | Auto-approve list reactions |
-| `AUTOAPPROVE_LIST_ENTITY_RELATIONS` | boolean | `false` | Auto-approve relations |
-
-#### Per-Kind Auto-Approve Overrides
-
-Each `AUTOAPPROVE_*` variable has a per-kind override following the pattern `AUTOAPPROVE_{RESOURCE}_FOR_{KIND_UPPERCASE}`. The override applies only to records of that `_kind`; all other kinds fall back to the global setting.
-
-| Env var pattern | Example | Effect |
-|:---|:---|:---|
-| `AUTOAPPROVE_ENTITY_FOR_{KIND}` | `AUTOAPPROVE_ENTITY_FOR_BOOK=true` | Auto-approve only `book` entities; other kinds still need manual approval |
-| `AUTOAPPROVE_LIST_FOR_{KIND}` | `AUTOAPPROVE_LIST_FOR_BOOKSHELF=true` | Auto-approve only `bookshelf` lists |
-| `AUTOAPPROVE_ENTITY_REACTION_FOR_{KIND}` | `AUTOAPPROVE_ENTITY_REACTION_FOR_LIKE=true` | Auto-approve only `like` entity reactions |
-| `AUTOAPPROVE_LIST_REACTION_FOR_{KIND}` | `AUTOAPPROVE_LIST_REACTION_FOR_LIKE=true` | Auto-approve only `like` list reactions |
-
-### Default Visibility
-| Env var | Type | Default | Description |
-|:---|:---|:---|:---|
-| `VISIBILITY_ENTITY` | string | `private` | Default `_visibility` for new entities (`public`, `protected`, `private`) |
-| `VISIBILITY_LIST` | string | `private` | Default visibility for lists |
-| `VISIBILITY_ENTITY_REACTION` | string | `private` | Default visibility for entity reactions |
-| `VISIBILITY_LIST_REACTION` | string | `private` | Default visibility for list reactions |
-
-#### Per-Kind Visibility Overrides
-
-Same pattern as auto-approve: `VISIBILITY_{RESOURCE}_FOR_{KIND_UPPERCASE}`.
-
-| Env var pattern | Example | Effect |
-|:---|:---|:---|
-| `VISIBILITY_ENTITY_FOR_{KIND}` | `VISIBILITY_ENTITY_FOR_BOOK=public` | New `book` entities default to `public`; others use the global `VISIBILITY_ENTITY` |
-| `VISIBILITY_LIST_FOR_{KIND}` | `VISIBILITY_LIST_FOR_BOOKSHELF=protected` | New `bookshelf` lists default to `protected` |
-| `VISIBILITY_ENTITY_REACTION_FOR_{KIND}` | `VISIBILITY_ENTITY_REACTION_FOR_REVIEW=public` | New `review` reactions default to `public` |
-
 ### Response Limits
 | Env var | Type | Default | Description |
 |:---|:---|:---|:---|
@@ -176,15 +129,6 @@ ENTITY_REACTION_RECORD_LIMITS='[{"scope":"where[_entityId]=${_entityId}","limit"
 # Hard licence/seat cap: max 10 records total, EPC enforces with a global lock
 ENTITY_RECORD_LIMITS='[{"scope":"","limit":10,"enforceSerialisation":true}]'
 ```
-
-### Idempotency
-| Env var | Type | Default | Description |
-|:---|:---|:---|:---|
-| `IDEMPOTENCY_ENTITY` | string | _(none)_ | Fields contributing to entity idempotency key (comma-separated) |
-| `IDEMPOTENCY_LIST` | string | _(none)_ | Fields for list idempotency |
-| `IDEMPOTENCY_ENTITY_REACTION` | string | _(none)_ | Fields for entity reaction idempotency |
-| `IDEMPOTENCY_LIST_REACTION` | string | _(none)_ | Fields for list reaction idempotency |
-| `IDEMPOTENCY_LIST_ENTITY_REL` | string | _(none)_ | Fields for relation idempotency |
 
 ### Lookup Constraints
 
@@ -496,7 +440,124 @@ Jolokia exposes JMX over HTTP at `http://<host>:8778/jolokia`. Used by Hawtio fo
 
 ---
 
+## entity-persistence-base-orchestrator (EPBO)
+
+MicroProfile Config convention: `property.key` → `PROPERTY_KEY` (dots/hyphens → underscores, uppercased).
+
+> **Repository:** `entity-persistence-base-orchestrator` (new — cloned from `entity-persistence-universal-orchestrator` template)
+> **Default port:** `3002`
+> **Chain position:** EPG → **EPBO** → EPC → EPS
+
+### Server & Backend
+
+| Property | Env var | Default | Description |
+|:---|:---|:---|:---|
+| `quarkus.http.port` | `QUARKUS_HTTP_PORT` | `3002` | EPBO HTTP listen port |
+| `backend.base-url` | `BACKEND_BASE_URL` | `http://localhost:3001` | EPC base URL for Camel route `toD()` calls. Must **not** have a trailing slash. |
+| `gateway.base-url` | `GATEWAY_BASE_URL` | `http://localhost:8081` | Gateway URL used by the MicroProfile REST client for `EntityPersistenceClient` calls back through EPG. |
+| `quarkus.otel.enabled` | `QUARKUS_OTEL_ENABLED` | `true` | Enable OpenTelemetry tracing |
+| `quarkus.otel.exporter.otlp.endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
+| `quarkus.log.level` | `QUARKUS_LOG_LEVEL` | `INFO` | Root log level |
+
+> **No Redis dependency:** EPBO is a stateless in-memory compute layer. It does not use Redis for locking or caching. Do not configure Redis properties on EPBO.
+
+### Normalization Configuration
+
+EPBO reads the following env vars to determine how to normalize managed fields before forwarding to EPC/EPS. All values are optional; omitting them means no default is injected for that field.
+
+See [`epbo-initiative/analysis/T-05-config-schema.md`](../../../epbo-initiative/analysis/T-05-config-schema.md) for the full canonical schema with override rules and kind encoding.
+
+#### `_kind` defaults
+
+| Env var | Type | Default | Description |
+|:---|:---|:---|:---|
+| `ENTITY_DEFAULT_KIND` | string | *(not set)* | Default `_kind` for entity records on CREATE/PUT when absent from payload |
+| `LIST_DEFAULT_KIND` | string | *(not set)* | Default `_kind` for list records |
+| `RELATION_DEFAULT_KIND` | string | *(not set)* | Default `_kind` for relation records |
+| `ENTITY_REACTION_DEFAULT_KIND` | string | *(not set)* | Default `_kind` for entityReaction records |
+| `LIST_REACTION_DEFAULT_KIND` | string | *(not set)* | Default `_kind` for listReaction records |
+
+Per-kind overrides: not applicable (`_kind` is the override key itself).
+
+#### `_visibility` defaults
+
+| Env var | Type | Default | Description |
+|:---|:---|:---|:---|
+| `ENTITY_DEFAULT_VISIBILITY` | string | *(not set)* | Default `_visibility` for entity records on CREATE/PUT (`private` \| `protected` \| `public`) |
+| `ENTITY_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` | string | *(inherits base)* | Per-kind override. Example: `ENTITY_DEFAULT_VISIBILITY_FOR_BOOK=public` |
+| `LIST_DEFAULT_VISIBILITY` | string | *(not set)* | Default `_visibility` for list records |
+| `LIST_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` | string | *(inherits base)* | Per-kind override for list |
+| `ENTITY_REACTION_DEFAULT_VISIBILITY` | string | *(not set)* | Default `_visibility` for entityReaction records |
+| `ENTITY_REACTION_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` | string | *(inherits base)* | Per-kind override for entityReaction |
+| `LIST_REACTION_DEFAULT_VISIBILITY` | string | *(not set)* | Default `_visibility` for listReaction records |
+| `LIST_REACTION_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` | string | *(inherits base)* | Per-kind override for listReaction |
+
+`_visibility` does not apply to relation records. `{KIND_KEY}` = kind uppercased with `-` replaced by `_` (e.g., kind `e-book` → `E_BOOK`).
+
+#### `_validFromDateTime` auto-approve
+
+| Env var | Type | Default | Description |
+|:---|:---|:---|:---|
+| `ENTITY_AUTO_APPROVE` | boolean | `false` | When `true`, sets `_validFromDateTime=now` for entity records on CREATE/PUT when absent |
+| `ENTITY_AUTO_APPROVE_FOR_{KIND_KEY}` | boolean | *(inherits base)* | Per-kind override. Example: `ENTITY_AUTO_APPROVE_FOR_BOOK=true` |
+| `LIST_AUTO_APPROVE` | boolean | `false` | Auto-approve for list records |
+| `LIST_AUTO_APPROVE_FOR_{KIND_KEY}` | boolean | *(inherits base)* | Per-kind override for list |
+| `RELATION_AUTO_APPROVE` | boolean | `false` | Auto-approve for relation records |
+| `RELATION_AUTO_APPROVE_FOR_{KIND_KEY}` | boolean | *(inherits base)* | Per-kind override for relation |
+| `ENTITY_REACTION_AUTO_APPROVE` | boolean | `false` | Auto-approve for entityReaction records |
+| `ENTITY_REACTION_AUTO_APPROVE_FOR_{KIND_KEY}` | boolean | *(inherits base)* | Per-kind override for entityReaction |
+| `LIST_REACTION_AUTO_APPROVE` | boolean | `false` | Auto-approve for listReaction records |
+| `LIST_REACTION_AUTO_APPROVE_FOR_{KIND_KEY}` | boolean | *(inherits base)* | Per-kind override for listReaction |
+
+PATCH operations never trigger auto-approve regardless of configuration.
+
+#### Fields with no configuration
+
+| Field | Behavior |
+|:---|:---|
+| `_validUntilDateTime` | Always coerced to explicit `null` when absent on CREATE/PUT. No config. |
+| `_slug` | Derived via `slugify(_name, {lower:true, strict:true})` when `_name` is present and `_slug` is absent. Applies to entity, list, entityReaction, listReaction only (not relation). No config. |
+| `_createdDateTime` | Set to `now` when absent (secondary injector — EPG is primary). No config. |
+| `_lastUpdatedDateTime` | Set to `now` when absent (secondary injector — EPG is primary). No config. |
+
+### EPS-to-EPBO Variable Migration Reference
+
+| Old EPS variable (removed) | New EPBO variable |
+|:---|:---|
+| `DEFAULT_ENTITY_KIND` | `ENTITY_DEFAULT_KIND` |
+| `DEFAULT_LIST_KIND` | `LIST_DEFAULT_KIND` |
+| `DEFAULT_RELATION_KIND` | `RELATION_DEFAULT_KIND` |
+| `DEFAULT_ENTITY_REACTION_KIND` | `ENTITY_REACTION_DEFAULT_KIND` |
+| `DEFAULT_LIST_REACTION_KIND` | `LIST_REACTION_DEFAULT_KIND` |
+| `VISIBILITY_ENTITY` | `ENTITY_DEFAULT_VISIBILITY` |
+| `VISIBILITY_ENTITY_FOR_{KIND}` | `ENTITY_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` |
+| `VISIBILITY_LIST` | `LIST_DEFAULT_VISIBILITY` |
+| `VISIBILITY_LIST_FOR_{KIND}` | `LIST_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` |
+| `VISIBILITY_ENTITY_REACTION` | `ENTITY_REACTION_DEFAULT_VISIBILITY` |
+| `VISIBILITY_ENTITY_REACTION_FOR_{KIND}` | `ENTITY_REACTION_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` |
+| `VISIBILITY_LIST_REACTION` | `LIST_REACTION_DEFAULT_VISIBILITY` |
+| `VISIBILITY_LIST_REACTION_FOR_{KIND}` | `LIST_REACTION_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` |
+| `AUTOAPPROVE_ENTITY` | `ENTITY_AUTO_APPROVE` |
+| `AUTOAPPROVE_ENTITY_FOR_{KIND}` | `ENTITY_AUTO_APPROVE_FOR_{KIND_KEY}` |
+| `AUTOAPPROVE_LIST` | `LIST_AUTO_APPROVE` |
+| `AUTOAPPROVE_LIST_FOR_{KIND}` | `LIST_AUTO_APPROVE_FOR_{KIND_KEY}` |
+| `AUTOAPPROVE_LIST_ENTITY_RELATIONS` | `RELATION_AUTO_APPROVE` |
+| `AUTOAPPROVE_LIST_ENTITY_RELATIONS_FOR_{KIND}` | `RELATION_AUTO_APPROVE_FOR_{KIND_KEY}` |
+| `AUTOAPPROVE_ENTITY_REACTION` | `ENTITY_REACTION_AUTO_APPROVE` |
+| `AUTOAPPROVE_ENTITY_REACTION_FOR_{KIND}` | `ENTITY_REACTION_AUTO_APPROVE_FOR_{KIND_KEY}` |
+| `AUTOAPPROVE_LIST_REACTION` | `LIST_REACTION_AUTO_APPROVE` |
+| `AUTOAPPROVE_LIST_REACTION_FOR_{KIND}` | `LIST_REACTION_AUTO_APPROVE_FOR_{KIND_KEY}` |
+| `IDEMPOTENCY_ENTITY` | **Removed — no replacement.** Idempotency computation removed from the stack entirely. |
+| `IDEMPOTENCY_LIST` | **Removed — no replacement.** |
+| `IDEMPOTENCY_ENTITY_REACTION` | **Removed — no replacement.** |
+| `IDEMPOTENCY_LIST_REACTION` | **Removed — no replacement.** |
+| `IDEMPOTENCY_LIST_ENTITY_REL` | **Removed — no replacement.** |
+
+Where `{KIND_KEY}` = `{KIND}.toUpperCase().replace(/-/g, '_')`.
+
 ## entity-persistence-universal-orchestrator
+
+> **Note:** EPUO is **not part of the runtime chain**. The active request chain is EPG → EPBO → EPC → EPS. EPUO remains in the workspace as the template source from which EPBO was cloned. It is not started as part of normal service operation.
 
 MicroProfile Config convention: `property.key` → `PROPERTY_KEY` (dots/hyphens → underscores, uppercased).
 

@@ -127,11 +127,8 @@ Same pattern, under `/list-reactions`. Supports hierarchy.
     "collections": { "entity": "GenericEntities", "list": "Lists", "entityReactions": "EntityReactions", "listReactions": "ListReactions", "listEntityRel": "ListEntityRelations" },
     "allowedKinds": { "entity": ["book","author"], "list": ["bookshelf"], ... },
     "uniqueness": { "entity": "where[_kind]=${_kind}&where[_slug]=${_slug}", ... },
-    "autoApprove": { "entity": false, "list": false, "entityReaction": true, "listReaction": true, "listEntityRelations": true },
-    "visibility": { "entity": "protected", "list": "protected", ... },
     "responseLimits": { "entity": 100, "list": 100, ... },
-    "recordLimits": { "entity": "[{\"scope\":\"\",\"limit\":500}]", ... },
-    "idempotency": { "entity": "", ... }
+    "recordLimits": { "entity": "[{\"scope\":\"\",\"limit\":500}]", ... }
   }
 }
 ```
@@ -199,17 +196,21 @@ ENTITY_REACTION_KINDS=like,comment,rating,flag,review
 LIST_REACTION_KINDS=like,comment,rating,flag,review
 ```
 
-### Default Kinds
+### Moved Concerns — Now Owned by EPBO
 
-Fallback `_kind` when a record is created without one:
-
-```bash
-DEFAULT_ENTITY_KIND=book
-DEFAULT_LIST_KIND=bookshelf
-DEFAULT_RELATION_KIND=contains
-DEFAULT_ENTITY_REACTION_KIND=like
-DEFAULT_LIST_REACTION_KIND=like
-```
+> **As of the EPBO initiative**, the following normalization concerns have been removed from EPS and moved to `entity-persistence-base-orchestrator` (EPBO):
+>
+> | Concern | Removed EPS vars | EPBO replacement |
+> |:---|:---|:---|
+> | Default `_kind` | `DEFAULT_ENTITY_KIND`, `DEFAULT_LIST_KIND`, `DEFAULT_RELATION_KIND`, `DEFAULT_ENTITY_REACTION_KIND`, `DEFAULT_LIST_REACTION_KIND` | `ENTITY_DEFAULT_KIND`, `LIST_DEFAULT_KIND`, etc. (EPBO-owned) |
+> | Default `_visibility` | `VISIBILITY_ENTITY[_FOR_{KIND}]`, `VISIBILITY_LIST[_FOR_{KIND}]`, etc. | `ENTITY_DEFAULT_VISIBILITY[_FOR_{KIND_KEY}]`, etc. (EPBO-owned) |
+> | Auto-approve `_validFromDateTime` | `AUTOAPPROVE_ENTITY[_FOR_{KIND}]`, `AUTOAPPROVE_LIST_ENTITY_RELATIONS`, etc. | `ENTITY_AUTO_APPROVE[_FOR_{KIND_KEY}]`, etc. (EPBO-owned) |
+> | `_slug` generation | (algorithmic, no env var) | Computed by EPBO from `slugify(_name)` |
+> | `_validUntilDateTime` null-coercion | (algorithmic, no env var) | Always set to explicit `null` when absent, by EPBO |
+> | `_idempotencyKey` computation | `IDEMPOTENCY_ENTITY`, `IDEMPOTENCY_LIST`, `IDEMPOTENCY_ENTITY_REACTION`, `IDEMPOTENCY_LIST_REACTION`, `IDEMPOTENCY_LIST_ENTITY_REL` | **Removed from the stack entirely.** Idempotency is now client-supplied via `X-Idempotency-Key` header. |
+>
+> EPS no longer reads or acts on any of the above variables. Setting them on EPS has no effect.
+> See [`16_COMPONENT_entity-persistence-base-orchestrator.md`](./16_COMPONENT_entity-persistence-base-orchestrator.md) and [`31_OPS_configuration-reference.md`](./31_OPS_configuration-reference.md) for the current EPBO configuration schema.
 
 ### Uniqueness Constraints
 
@@ -288,35 +289,6 @@ ENTITY_REACTION_UNIQUENESS="where[_kind]=like&where[_entityId]=${_entityId}&set[
 > The `info.scope` field echoes back the fully interpolated uniqueness rule that was violated, useful for debugging.
 
 During PATCH/PUT on an existing record the service automatically excludes the record's own `_id` from the uniqueness count so a no-change update does not self-conflict.
-
-### Auto Approve
-
-Control whether new records automatically have `_validFromDateTime` set to the creation time. When `false`, records are created in `pending` state until explicitly approved by the gateway or an admin.
-
-Supports both **type-level** and **kind-level** granularity:
-
-```bash
-AUTOAPPROVE_ENTITY=false
-AUTOAPPROVE_ENTITY_FOR_BOOK=true          # overrides the type-level default for kind=book
-AUTOAPPROVE_LIST=false
-AUTOAPPROVE_LIST_ENTITY_RELATIONS=true
-AUTOAPPROVE_ENTITY_REACTION=true
-AUTOAPPROVE_LIST_REACTION=true
-```
-
-### Visibility Default
-
-Default `_visibility` for new records when not supplied by the caller. Supports type-level and kind-level overrides:
-
-```bash
-VISIBILITY_ENTITY=protected              # public | protected | private
-VISIBILITY_ENTITY_FOR_BOOK=private       # override per-kind
-VISIBILITY_LIST=protected
-VISIBILITY_ENTITY_REACTION=protected
-VISIBILITY_LIST_REACTION=protected
-```
-
-> This setting only applies if `_visibility` is absent from the incoming request body. To enforce visibility by user role use [`11_COMPONENT_entity-persistence-gateway.md`](./11_COMPONENT_entity-persistence-gateway.md).
 
 ### Response Limits
 
@@ -441,23 +413,6 @@ Each constraint object:
 ```
 
 Violation returns `422` with codes like `ENTITY-INVALID-LOOKUP-REFERENCE`, `ENTITY-INVALID-LOOKUP-KIND`, or `ENTITY-INVALID-PARENT-ENTITY-ID`.
-
-### Idempotency
-
-Define which fields constitute the idempotency key. If an existing record with the same key combination already exists, the service returns that record as if it were newly created (no duplicate).
-
-Supports type-level and kind-level granularity:
-
-```bash
-IDEMPOTENCY_ENTITY=               # e.g.: kind,name,createdBy
-IDEMPOTENCY_ENTITY_FOR_BOOK=      # override per-kind
-IDEMPOTENCY_LIST=
-IDEMPOTENCY_LIST_ENTITY_REL=
-IDEMPOTENCY_ENTITY_REACTION=
-IDEMPOTENCY_LIST_REACTION=
-```
-
-> **Important:** Idempotency calculation happens **before** managed fields (like `_slug`) are populated. Use pre-slug field names: `name` not `slug`, `kind` not `_kind`.
 
 ---
 

@@ -2,7 +2,10 @@
 
 ## Overview
 
-This guide explains how to run the Tarcinapp stack locally for development. It covers the minimum viable topology (EPS + Gateway), adding the orchestrator, and connecting the GUI.
+This guide explains how to run the Tarcinapp stack locally for development. It covers the full runtime chain (EPG → EPBO → EPC → EPS) and how to connect the GUI.
+
+> **Runtime chain:** `EPG :8081 → EPBO :3002 → EPC :3001 → EPS :3000 → MongoDB`
+> `entity-persistence-universal-orchestrator` (EPUO) is **not** part of this chain — it remains in the workspace as a template source only and is not started.
 
 ---
 
@@ -15,7 +18,11 @@ For most development work, you need:
 4. **entity-persistence-service** — REST backend
 5. **entity-persistence-gateway** — API gateway (calls OPA and EPS)
 
-The orchestrator and GUI are optional add-ons.
+For the full chain with payload normalization and integrity locks, also start:
+- **entity-persistence-cache** (EPC) — Redis scope locks, findById cache
+- **entity-persistence-base-orchestrator** (EPBO) — payload normalization
+
+The GUI is an optional add-on.
 
 ---
 
@@ -482,29 +489,31 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/api/v1/books
 
 ---
 
-## Adding the Orchestrator to Local Dev
+## Adding EPBO to Local Dev
 
-If you need the orchestrator in the chain:
+To run the full chain (`EPG → EPBO → EPC → EPS`), start EPBO after EPC:
 
 ```bash
-cd entity-persistence-universal-orchestrator
+cd entity-persistence-base-orchestrator
 
-# quarkus:dev enables live reload — changes to Camel processors and CDI beans
-# take effect immediately without restarting the JVM.
-./mvnw quarkus:dev   # starts on :8079
+# quarkus:dev enables live reload — changes to normalization processors take effect
+# immediately without restarting the JVM.
+mvn quarkus:dev   # starts on :3002
 ```
 
-The Quarkus Dev UI is available at `http://localhost:8079/q/dev` — it shows all CDI beans, Camel routes, registered extensions, and health checks. This is useful for confirming that your custom processors are wired correctly.
+The Quarkus Dev UI is available at `http://localhost:3002/q/dev` — it shows all CDI beans, Camel routes, registered extensions, and health checks.
 
-Then update the gateway's backend in `application-dev.yaml` to point to the orchestrator:
+Then update the gateway's backend in `application-dev.yaml` to point to EPBO:
 ```yaml
 app:
   backend:
     host: localhost
-    port: 8079
+    port: 3002
 ```
 
-Now the chain is: `Gateway :8081 → Orchestrator :8079 → EPS :3000 → MongoDB`
+Now the chain is: `Gateway :8081 → EPBO :3002 → EPC :3001 → EPS :3000 → MongoDB`
+
+> **Note on EPUO:** `entity-persistence-universal-orchestrator` is a **template repository** — it is not started in local dev. Do not point the gateway at port `:8079` for normal development. Use `:3002` (EPBO) or `:3001` (EPC, without EPBO) or `:3000` (EPS directly, no normalization or locks).
 
 ---
 
@@ -633,19 +642,18 @@ Env var names are confirmed from the configuration reference (`31_OPS_configurat
 | `MONGODB_DATABASE` | `tappdb` | |
 | `ENTITY_KINDS` | `book,chapter,author` | empty = accept any kind |
 | `LIST_KINDS` | `bookshelf` | |
-| `AUTOAPPROVE_ENTITY` | `true` | set false in production |
-| `AUTOAPPROVE_LIST` | `true` | |
-| `VISIBILITY_ENTITY` | `protected` | `private` = owner-only |
 | `RESPONSE_LIMIT_ENTITY` | `100` | |
 | `LOG_LEVEL` | `debug` | |
+
+> **Removed from EPS:** `AUTOAPPROVE_*`, `VISIBILITY_*`, `DEFAULT_*_KIND`, and `IDEMPOTENCY_*` are now EPBO-owned (or removed entirely for idempotency). Set them on EPBO, not EPS.
 
 ### entity-persistence-gateway (`application-dev.yaml`)
 
 | Property | Local dev value | Notes |
 |:---|:---|:---|
 | `app.inbound.port` | `8081` | |
-| `app.backend.host` | `localhost` | or `localhost:8079` with orchestrator |
-| `app.backend.port` | `3000` | |
+| `app.backend.host` | `localhost` | |
+| `app.backend.port` | `3002` | points to EPBO; use `3001` for EPC-only, `3000` for EPS-only |
 | `app.opa.host` | `localhost` | |
 | `app.opa.port` | `8181` | |
 | `app.auth.issuer` | `http://localhost:8080/realms/tarcinapp` | must match JWT `iss` exactly |
@@ -654,13 +662,16 @@ Env var names are confirmed from the configuration reference (`31_OPS_configurat
 | `app.logging.tarcinapp` | `DEBUG` | |
 | `spring.redis.host` | `localhost` | |
 
-### entity-persistence-universal-orchestrator (`application.properties` / env)
+### entity-persistence-base-orchestrator (`application.properties` / env)
 
 | Property | Local dev value | Notes |
 |:---|:---|:---|
-| `quarkus.http.port` | `8079` | |
-| `backend.base-url` | `http://localhost:3000` | points to EPS |
+| `quarkus.http.port` | `3002` | |
+| `backend.base-url` | `http://localhost:3001` | points to EPC |
 | `gateway.base-url` | `http://localhost:8081` | |
+| `ENTITY_DEFAULT_KIND` | `book` | (example) |
+| `ENTITY_AUTO_APPROVE` | `true` | set false in production |
+| `ENTITY_DEFAULT_VISIBILITY` | `protected` | `private` = owner-only |
 | `quarkus.otel.enabled` | `false` | no collector locally |
 | `quarkus.log.level` | `INFO` | |
 
@@ -670,14 +681,18 @@ Env var names are confirmed from the configuration reference (`31_OPS_configurat
 
 | Service | Default local port |
 |:---|:---|
-| entity-persistence-service | `3000` |
-| entity-persistence-gateway | `8081` |
-| entity-persistence-universal-orchestrator | `8079` |
+| entity-persistence-service (EPS) | `3000` |
+| entity-persistence-cache (EPC) | `3001` |
+| entity-persistence-base-orchestrator (EPBO) | `3002` |
+| entity-persistence-gateway (EPG) | `8081` |
 | entity-persistence-gateway-policies (OPA) | `8181` |
 | MongoDB | `27017` |
-| Redis | `6379` |
+| Redis (EPG — locks, rate-limiting, `noeviction`) | `6379` |
+| Redis (EPC — scope locks, findById cache, `allkeys-lfu`) | `6380` |
 | Keycloak | `8080` |
 | tarcinapp-base-gui (Vite dev server) | `5173` |
+
+> **Note:** `entity-persistence-universal-orchestrator` (EPUO, port `8079`) is **not started** in local dev — it is the template source for EPBO and is not part of the runtime chain.
 
 ---
 
@@ -708,15 +723,17 @@ until curl -sf http://localhost:3000/ping; do sleep 2; done
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-### 4. `_validFromDateTime` is `null` after create → `AUTOAPPROVE_ENTITY` not set
+### 4. `_validFromDateTime` is `null` after create → `ENTITY_AUTO_APPROVE` not set on EPBO
 
-When `AUTOAPPROVE_ENTITY=false` (the default), EPS stores records with `_validFromDateTime=null`. These records are in a "pending approval" state. Members querying with the default active-records filter (`sets[actives]`) will not see them. Set `AUTOAPPROVE_ENTITY=true` in your local `.env` to have `_validFromDateTime` set to now automatically on every create.
+When `ENTITY_AUTO_APPROVE=false` (the default), EPBO does not set `_validFromDateTime`. Records arrive at EPS without it and are stored as `null` — a "pending approval" state. Members querying with the default active-records filter (`sets[actives]`) will not see them. Set `ENTITY_AUTO_APPROVE=true` in your EPBO env to have `_validFromDateTime` set to `now` automatically on every create.
 
-### 5. Record not showing up in GET → visibility default is `private`
+> **Note:** Setting `AUTOAPPROVE_ENTITY` on EPS has no effect — this var was moved to EPBO and renamed to `ENTITY_AUTO_APPROVE`.
 
-The default `VISIBILITY_ENTITY` is `private`. Private records are only returned when the requesting user is listed in `sets[owners][userIds]`. For local dev, either:
-- Set `VISIBILITY_ENTITY=protected` in `.env`, or
-- Add the ownership filter to your query: `?sets[owners][userIds]=dev-user` (matching your JWT `sub`)
+### 5. Record not showing up in GET → `ENTITY_DEFAULT_VISIBILITY` not set on EPBO
+
+If `ENTITY_DEFAULT_VISIBILITY` is not set on EPBO, no visibility default is injected. Records arrive at EPS without `_visibility` and are stored without one. Depending on EPG visibility enforcement, they may be invisible. For local dev, set `ENTITY_DEFAULT_VISIBILITY=protected` in your EPBO env.
+
+> **Note:** Setting `VISIBILITY_ENTITY` on EPS has no effect — this var was moved to EPBO and renamed to `ENTITY_DEFAULT_VISIBILITY`.
 
 ### 6. 429 on local dev → rate limiter hit
 

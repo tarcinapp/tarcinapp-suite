@@ -20,13 +20,14 @@ Any enforcement pattern of the form:
 
 MongoDB multi-document transactions with snapshot isolation **do not eliminate this race** for the insert case. Both transactions open at nearly the same time, read the same snapshot (count = 0), and each commits its insert successfully because neither transaction's write is visible to the other's snapshot. The conflict is only observable *after* both commits.
 
-This affects three features in EPS:
+This affects two features in EPS:
 
 | Feature | Race outcome |
 |:---|:---|
 | Uniqueness constraints | Two concurrent creates with the same unique key both succeed → duplicate records |
 | Record limits | C concurrent creates at the boundary all pass the `count < limit` check → up to C − 1 over-limit records |
-| Idempotency | Two concurrent creates with the same idempotency key both find no existing record → duplicate records with the same `_idempotencyKey` |
+
+> **Idempotency note:** `_idempotencyKey` computation has been **removed from the stack** as part of the EPBO initiative. Idempotency is now a **client responsibility** — callers must supply an `X-Idempotency-Key` header. The Gateway's `AcquireLockForCreation` filter uses this header (when present) as the lock key, serialising concurrent requests with the same explicit idempotency key.
 
 ---
 
@@ -64,7 +65,7 @@ The suite applies mitigations at multiple layers. Each layer handles a different
 
 ### Layer 3 — EPC: Uniqueness-key and limit-scope locks
 
-**Component:** `entity-persistence-cache` *(planned)*  
+**Component:** `entity-persistence-cache`
 **Mechanism:** EPC reads the fully resolved uniqueness and record-limit configuration from EPS's `/system-info` endpoint (cached in-process with a 10-second TTL). For each incoming write request, it:
 
 1. Parses the configured uniqueness rule(s) and limit scope(s).
@@ -72,6 +73,8 @@ The suite applies mitigations at multiple layers. Each layer handles a different
 3. Constructs a **lock key from the derived unique dimensions**, not the raw payload hash.
 4. Acquires a Redisson lock on that key before forwarding the request to EPS.
 5. Releases the lock after EPS responds (via `doFinally` — releases even on error or timeout).
+
+> **EPBO interaction:** Because `entity-persistence-base-orchestrator` (EPBO) sits between the Gateway and EPC in the chain (`EPG → EPBO → EPC → EPS`), **all computed fields are fully resolved before EPC sees the payload**. In particular, `_slug` is always present in payloads arriving at EPC (computed by EPBO from `_name`). EPC's lock key interpolation therefore finds all required field values directly in the payload and never needs to derive computed fields itself. This eliminates the previous design concern where EPC might attempt to build a lock key referencing `${_slug}` on a payload that contained only `_name`.
 
 **Lock key examples:**
 
@@ -132,22 +135,24 @@ EPC must be deployed and inserted between the Gateway/Orchestrator and EPS for t
 
 EPS must never be exposed directly to clients (this is a core architectural constraint; see `21_CONCEPT_security-and-authorization.md`). If EPS is accessed directly — e.g. from an internal migration script or a mis-configured service — no gateway or EPC locks apply and all TOCTOU risks are present.
 
-### 4. Idempotency via `AcquireLockForCreation` only covers identical payloads
+### 4. Idempotency is client-supplied — not stack-computed
 
-The Gateway's payload-hash lock serialises requests with identical bodies. EPS's idempotency key (`_idempotencyKey` field computed from configured fields) provides a second guard. However, two requests with **slightly different payloads but the same idempotency field values** will hash differently at the Gateway layer and proceed in parallel. EPS's idempotency check will then catch the second one — but only after both have entered the database pipeline. A MongoDB unique sparse index on `_idempotencyKey` would provide the atomic backstop, but EPS currently has no `E11000 → duplicate-suppressed-return` handler for idempotency collisions.
+`_idempotencyKey` computation has been **removed from the stack entirely** as part of the EPBO initiative. EPS no longer derives an `_idempotencyKey` field from configured fields. Idempotency is now a **client responsibility**: callers may supply an `X-Idempotency-Key` request header. When present, the Gateway's `AcquireLockForCreation` filter uses this header value as the lock key (instead of a payload hash), serialising requests with the same explicit key.
+
+**What this means in practice:** Two requests that the client considers idempotent (same business operation, same idempotency key) will be serialised at the Gateway — the first succeeds and the second waits. If the client does not supply `X-Idempotency-Key`, the Gateway falls back to a SHA-256 hash of the raw request body; identical bodies are serialised, but logically equivalent bodies with minor differences are not.
 
 ---
 
 ## Summary: Concurrency Coverage by Feature
 
-| Feature | Layer 1 (GW hash lock) | Layer 2 (GW record lock) | Layer 3 (EPC scope lock) | Layer 4 (EPS check) | Layer 5 (MongoDB index) |
+| Feature | Layer 1 (GW hash/idem lock) | Layer 2 (GW record lock) | Layer 3 (EPC scope lock) | Layer 4 (EPS check) | Layer 5 (MongoDB index) |
 |:---|:---:|:---:|:---:|:---:|:---:|
 | Identical-payload duplicate create | ✅ | — | ✅ | ✅ | ✅ (with index) |
 | Different-payload same-key duplicate create | ⚠️ partial | — | ✅ (EPC required) | ✅ | ✅ (with index) |
 | Concurrent updates to same record | — | ✅ | — | — | — |
 | Per-user / per-kind record limit race | — | — | ✅ (EPC required) | ✅ (best-effort) | — |
 | Global / wide-scope record limit race | — | — | ❌ by design | ✅ (best-effort) | — |
-| Idempotency race (same key, different payload) | ⚠️ partial | — | ✅ (EPC required) | ✅ | ⚠️ no E11000 handler |
+| Client-supplied idempotency key collision | ✅ (header lock) | — | — | — | — |
 
 Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered by design · — Not applicable
 

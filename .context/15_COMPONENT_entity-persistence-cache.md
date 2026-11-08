@@ -2,12 +2,12 @@
 
 ## Component Identity
 
-**Repository:** `entity-persistence-cache` *(planned — not yet created)*  
-**Technology:** Java 21 · Quarkus 3.x · Apache Camel (camel-quarkus) · Redisson  
-**Layer:** V — Data, Search & Storage  
-**Default port:** `3001`  
-**Template basis:** Cloned and extended from `entity-persistence-universal-orchestrator`  
-**Source of truth for its own docs:** *(repository does not yet exist)*
+**Repository:** `entity-persistence-cache`
+**Technology:** Java 21 · Quarkus 3.x · Apache Camel (camel-quarkus) · Redisson
+**Layer:** V — Data, Search & Storage
+**Default port:** `3001`
+**Template basis:** Cloned and extended from `entity-persistence-universal-orchestrator`
+**Chain position:** `EPG :8081 → EPBO :3002 → EPC :3001 → EPS :3000 → MongoDB`
 
 ---
 
@@ -29,7 +29,7 @@ EPC is built incrementally in three phases:
 
 | Phase | Scope | Status |
 |:---|:---|:---|
-| **Phase 1** | Distributed locking (uniqueness + record-limit scope locks) | Planned |
+| **Phase 1** | Distributed locking (uniqueness + record-limit scope locks) | In progress |
 | **Phase 2** | Single-record (`findById`) GET response caching | Planned |
 | **Phase 3** | Visitor (public + active) collection caching with TTL-only invalidation | Committed — see [Phase 3: Visitor Collection Caching](#phase-3-visitor-collection-caching) |
 
@@ -143,22 +143,26 @@ LoadingCache<String, SystemInfo> configCache = Caffeine.newBuilder()
 
 ### Deployment topology
 
-EPC and EPS are deployed in the **same Kubernetes pod** (sidecar pattern), sharing `localhost`. The loopback communication between EPC and EPS is as fast as inter-process communication with no network hop.
+EPC and EPS are deployed in the **same Kubernetes pod** (sidecar pattern), sharing `localhost`. EPBO sits directly in front of EPC in the request chain.
 
 ```
-Client → Gateway :8081 → Orchestrator :8079 → EPC :3001 → EPS :3000 → MongoDB
-                │                                   │
-                └── redis-gateway (locks,           └── redis-epc (scope locks,
-                    rate limiting)                      findById cache)
+Client → Gateway :8081 → EPBO :3002 → EPC :3001 → EPS :3000 → MongoDB
+                │                                        │
+                └── redis-gateway (locks,                └── redis-epc (scope locks,
+                    rate limiting)                           findById cache)
 ```
 
-When the Orchestration Layer is not deployed, the topology shortens to:
+> **Payload pre-resolution:** Because EPBO sits between the Gateway and EPC, **all managed fields are fully resolved before EPC sees the payload**. In particular, `_slug` is always present in payloads arriving at EPC (computed by EPBO from `_name`). EPC's `LockKeyBuilder` therefore finds all interpolation values directly in the payload — no derivation needed.
+
+When EPBO is not deployed (e.g. minimal dev topology), the topology shortens to:
 
 ```
 Client → Gateway :8081 → EPC :3001 → EPS :3000 → MongoDB
 ```
 
-The Gateway routes to EPC by setting `app.backend.host` and `app.backend.port` to EPC's address — exactly the same knob used to insert the Orchestrator.
+The Gateway routes to EPC by setting `app.backend.host` and `app.backend.port` to EPC's address. EPBO sets its own `backend.base-url` to EPC's address (`http://localhost:3001`). EPC's `backend.base-url` points to EPS (`http://localhost:3000`). Each service in the chain knows only the next hop.
+
+> **EPC does not call EPBO.** EPC's only external dependency is EPS `/system-info` (for uniqueness/limit config). EPC never needs an `epbo.base-url` property and should not have one.
 
 ---
 
@@ -174,7 +178,7 @@ ENTITY_UNIQUENESS="where[_kind]=${_kind}&where[_slug]=${_slug}&set[owners][userI
 
 This rule means: *a record is unique per owner, per kind, per slug*. User 1 and user 2 can each have a `book` with slug `the-great-gatsby`; neither can have two. The `set[owners][userIds]=${_ownerUsers}` part scopes the uniqueness check to the owner dimension — see `10_COMPONENT_entity-persistence-service.md §Uniqueness Constraints` for the full semantics.
 
-EPC parses the rule (cached for 10s from `/system-info`), identifies the interpolatable dimensions (`_kind`, `_slug`, `_ownerUsers`), and extracts those values from the incoming request payload.
+EPC parses the rule (cached for 10s from `/system-info`), identifies the interpolatable dimensions (`_kind`, `_slug`, `_ownerUsers`), and extracts those values from the **merged record node** — see [Lock key source for PATCH requests](#lock-key-source-for-patch-requests) below.
 
 **When an interpolated field is an array, EPC acquires one lock per array element.** A single lock key built from only the first element would miss races involving the other owners. For example, if request A has `_ownerUsers: ["user-1", "user-2"]` and request B has `_ownerUsers: ["user-2", "user-3"]`, they share `user-2` as a co-owner and would collide on the `user-2` ownership dimension — but if only `[0]` were used, they would get different lock keys and race freely.
 
@@ -251,6 +255,74 @@ When `enforceSerialisation` is absent or `false` (the default), wide-scope rules
 | Per-user/per-kind cap with interpolatable scope | N/A — always locked per the interpolated dimensions, no flag needed |
 
 The practical overshoot when `enforceSerialisation: false` for a global limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable. For hard quotas at high volume where serialisation is also unacceptable, a MongoDB counter document with atomic `$inc` remains the correct solution and is out of scope for EPC.
+
+### Lock key source for PATCH requests
+
+A PATCH payload contains only the fields the caller intends to change — the rest are absent. If the uniqueness rule references fields that are not in the payload (e.g. `_kind` and `_name` when only `foo` is being patched), `LockKeyBuilder` would fall back to `__missing__` placeholders for those dimensions. This does not create a correctness hole — `__missing__` causes over-serialisation (every PATCH on any record of that type is serialised regardless of actual overlap) — but it inflates unnecessary lock contention.
+
+**The correct source for lock key building on PATCH paths is the post-patch state of the record** — i.e. the current stored record with the PATCH payload fields merged over it. EPC derives this by reading the full-field cached version of the record and merging the PATCH payload in memory.
+
+#### Why the full-field cache entry is available
+
+When authentication and authorisation are enabled in the Gateway, the Gateway evaluates authorisation on every write by first issuing `GET /entities/{id}` to EPS through EPC. This GET populates EPC's findById cache with the full-field record (`{APP_SHORTCODE}:epc:cache:{recordType}:{id}:`) before the PATCH arrives at EPC's write PreProcessor. The record is therefore virtually always in the cache when the PreProcessor runs under normal auth-enabled topology.
+
+When authentication and authorisation are disabled, the Gateway skips the authorisation GET. The record may still be in the cache from a prior client GET, but a cache miss is structurally more likely. The fallback path (see below) handles this case.
+
+#### Cache entry eligibility: full-field entries only
+
+A cached entry is eligible for lock key building **only if it was stored without any `filter[fields]` restriction**, i.e. the cache key suffix is empty (`{id}:`). Entries stored with a field projection (e.g. `{id}:fieldset=summary` or `{id}:filter%5Bfields%5D%5B_name%5D=true`) may be missing fields that the uniqueness rule references. Treat any entry with a non-empty query-string suffix as a miss for this purpose.
+
+When scanning `{APP_SHORTCODE}:epc:cache:{recordType}:{id}:*` during the PATCH PreProcessor, EPC must specifically target the zero-suffix entry `{id}:`. If that key is absent or holds a 404 response, it is a miss.
+
+#### On cache miss: fall through to EPS
+
+When the full-field cache entry is absent, EPC issues `GET /entities/{id}` directly to EPS over the localhost loopback (the same channel used for `/system-info` calls). This is a blocking call on a Camel worker thread — the same execution model as the existing `configCacheService.getConfig()` call — so no reactive chain changes are required.
+
+The EPS response is handled as follows:
+
+| EPS response | EPC action |
+|:---|:---|
+| `200 OK` | Use the response body as the current record for merge and lock key building |
+| `404 Not Found` | The record does not exist; return 404 to the caller immediately — no lock acquisition needed |
+| `5xx` / unreachable | Return `503 Service Unavailable` — EPS is unavailable; the write cannot be safely serialised |
+
+EPC does **not** write this EPS response into the findById cache. The PATCH PreProcessor immediately evicts the cache entry in the next step anyway; caching it here would only be evicted a millisecond later.
+
+**Why falling through to EPS is correct in both scenarios:**
+
+- *Auth enabled (scenario a2 — rare miss):* A miss means either the TTL expired in the sub-second window between the Gateway's authorisation GET and the PATCH arriving, or Redis was temporarily unavailable during the authorisation GET. In both cases the record exists in EPS. Falling through retrieves the current state without any client-visible failure.
+- *Auth disabled (scenario b2 — common miss):* No proactive cache warming occurs. A direct EPS fetch is the normal hot path. The record is on localhost; the cost is negligible. Failing the request instead would require the client or Gateway to retry, adding a round-trip with no benefit — the second attempt would also be a cache miss and would have to fall through anyway.
+
+Failing the request on a cache miss is not a viable strategy in either scenario: it makes correctness dependent on Redis availability and TTL timing, neither of which has any bearing on whether the underlying write is valid.
+
+#### The merge
+
+The merge is a **shallow, non-mutating overlay** of the PATCH payload over the fetched/cached record: for each top-level field present in the PATCH payload, the payload value replaces the corresponding field in the record; all other fields are inherited unchanged. This matches EPS's own PATCH semantics. The result is a `JsonNode` used solely for lock key building — it is never written back to cache or forwarded to EPS.
+
+#### Complete PATCH PreProcessor operation order
+
+The required order in the PATCH write PreProcessor is:
+
+```
+1. Read full-field cache entry: {APP_SHORTCODE}:epc:cache:{recordType}:{id}:
+       hit  → use cached body as current record JsonNode
+       miss → GET /entities/{id} from EPS
+                 200 → use EPS response body as current record JsonNode
+                 404 → return 404 to caller (no further steps)
+                 5xx → return 503 to caller (no further steps)
+
+2. Merge: shallow-overlay PATCH payload fields over current record → merged JsonNode
+
+3. Evict cache: DEL {APP_SHORTCODE}:epc:cache:{recordType}:{id}:*
+
+4. Acquire scope locks using merged JsonNode for key interpolation
+
+5. Forward PATCH to EPS
+```
+
+Step 3 (evict) must follow step 1 (read): evicting before reading would guarantee a cache miss and force every PATCH into an EPS fetch. Step 3 must precede step 4 (acquire lock) per the pre-existing eviction ordering requirement — reversing them creates a window where a concurrent reader re-populates the cache with stale data between lock acquisition and write completion.
+
+**When EPS rejects the write (409, 422, 429) after step 5:** the cache was evicted in step 3 unnecessarily. The next GET for this record will incur one extra MongoDB round-trip. This is a harmless performance cost, not a correctness issue — it is the same pre-existing behaviour documented in the Invalidation section.
 
 ---
 
@@ -403,14 +475,18 @@ If specific workflows require **read-your-write consistency** (e.g. the writer's
 
 **Thundering herd:** When a hot record's TTL expires, concurrent readers all forward simultaneously to EPS. For findById this is low severity — single-record reads are cheap and MongoDB handles parallel by-ID reads efficiently. No request coalescing is implemented in Phase 2. If post-deployment metrics show a problematic burst rate on the same key, add `SETNX`-based coalescing as a follow-on.
 
-**Lock acquisition — non-blocking requirement:** All lock operations use `RLockReactive.tryLockAsync(waitTime, leaseTime, TimeUnit)`. Blocking `tryLock` must **never** be called on a Vert.x event-loop thread (inherited from the Quarkus Reactive / Vert.x runtime). All lock operations must remain on the reactive pipeline. Default: `waitTime=3s`, `leaseTime=30s`.
+**Lock acquisition — blocking `tryLock` on Camel worker threads:** EPC's Camel processors run on Camel worker threads, not on Vert.x event-loop threads. Blocking `tryLock(waitTime, leaseTime, TimeUnit)` is therefore safe here — it does not starve the event loop. `RLockReactive.tryLockAsync` would be required only if lock acquisition were placed directly on a Vert.x event-loop thread, which it is not. The design doc previously noted `RLockReactive.tryLockAsync` as a requirement; that note was incorrect for this execution model and has been removed. If EPC is ever moved to a fully reactive Camel setup (all processors on event-loop threads), replace with `RLockReactive.tryLockAsync` at that point.
 
-**Write operation ordering in PreProcessor:** The required order is strictly:
-1. Evict findById cache entry (`DEL` wildcard)
-2. Acquire scope lock
-3. Forward write to EPS
+**Write operation ordering in PATCH PreProcessor:** The required order for PATCH (update-by-id) is defined in full in [Complete PATCH PreProcessor operation order](#complete-patch-preprocessor-operation-order). In summary:
+1. Read full-field cache entry; on miss fall through to EPS
+2. Merge PATCH payload over fetched record
+3. Evict findById cache entry (`DEL` wildcard)
+4. Acquire scope locks using merged record
+5. Forward write to EPS
 
-Reversing steps 1 and 2 creates a window where a concurrent reader re-populates the cache with a stale response between lock acquisition and write completion.
+For non-PATCH writes (PUT, DELETE by id), steps 1 and 2 are omitted — no merge is needed. The order for those operations is: evict → acquire lock → forward.
+
+Placing eviction before lock acquisition (step 3 before step 4) is mandatory: reversing them creates a window where a concurrent reader re-populates the cache with a stale response between lock acquisition and write completion.
 
 **Redis unavailability:**
 - **Locks** — fail fast, return `503 Service Unavailable`. Lock acquisition is required for correctness; degrading silently would allow TOCTOU races.
@@ -517,6 +593,7 @@ All counters carry a `record_type` tag (`entity`, `list`, `relation`, `entity-re
 | `epc.cache.put` | Counter | `record_type`, `status: [200, 404]` | Entry written to cache |
 | `epc.cache.evict` | Counter | `record_type`, `trigger: [write_single, write_delete, write_bulk_noop, ttl_expired, bypass]` | Entry evicted. `write_bulk_noop` is incremented on updateAll/deleteAll to surface the known-limitation in metrics even though no actual eviction occurs |
 | `epc.cache.conditional_hit` | Counter | `record_type` | `If-None-Match` matched stored ETag → 304 returned |
+| `epc.lock.record_fetch` | Counter | `record_type`, `source: [cache_hit, eps_fallback]` | Record fetched to build PATCH lock key. `cache_hit` — full-field cache entry used; `eps_fallback` — direct EPS GET was required (auth disabled, cold cache, or TTL expiry) |
 | `epc.lock.acquired` | Counter | `lock_type: [uniqueness, limit, global]` | Lock acquired successfully |
 | `epc.lock.released` | Counter | `lock_type` | Lock released |
 | `epc.lock.timeout` | Counter | `lock_type` | Lock wait exceeded `wait-time` → 423 |
@@ -544,6 +621,9 @@ JSON structured logging. MDC field `requestId` is populated from the inbound `X-
 | `CACHE_CONDITIONAL_HIT` | DEBUG | `If-None-Match` matched → 304 |
 | `CACHE_EVICT` | INFO | Cache entry evicted (write path) |
 | `CACHE_PUT` | DEBUG | Cache entry written |
+| `LOCK_RECORD_FETCH_HIT` | DEBUG | Full-field cache entry found and used for PATCH lock key merge |
+| `LOCK_RECORD_FETCH_EPS_FALLBACK` | INFO | Full-field cache entry absent; direct EPS GET used for PATCH lock key merge (normal when auth is disabled; transient when auth is enabled) |
+| `LOCK_RECORD_NOT_FOUND` | INFO | EPS returned 404 during PATCH record fetch — returning 404 to caller |
 | `LOCK_ACQUIRED` | DEBUG | Scope lock acquired |
 | `LOCK_RELEASED` | DEBUG | Scope lock released |
 | `LOCK_TIMEOUT` | WARN | Lock wait exceeded threshold → 423 |
