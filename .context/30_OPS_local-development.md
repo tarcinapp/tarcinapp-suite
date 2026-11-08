@@ -645,7 +645,7 @@ Env var names are confirmed from the configuration reference (`31_OPS_configurat
 | `RESPONSE_LIMIT_ENTITY` | `100` | |
 | `LOG_LEVEL` | `debug` | |
 
-> **Removed from EPS:** `AUTOAPPROVE_*`, `VISIBILITY_*`, `DEFAULT_*_KIND`, and `IDEMPOTENCY_*` are now EPBO-owned (or removed entirely for idempotency). Set them on EPBO, not EPS.
+> Normalization config (`ENTITY_AUTO_APPROVE`, `ENTITY_DEFAULT_VISIBILITY`, `ENTITY_DEFAULT_KIND`, etc.) belongs to EPBO, not EPS. See the EPBO section in [`31_OPS_configuration-reference.md`](./31_OPS_configuration-reference.md).
 
 ### entity-persistence-gateway (`application-dev.yaml`)
 
@@ -727,13 +727,9 @@ until curl -sf http://localhost:3000/ping; do sleep 2; done
 
 When `ENTITY_AUTO_APPROVE=false` (the default), EPBO does not set `_validFromDateTime`. Records arrive at EPS without it and are stored as `null` — a "pending approval" state. Members querying with the default active-records filter (`sets[actives]`) will not see them. Set `ENTITY_AUTO_APPROVE=true` in your EPBO env to have `_validFromDateTime` set to `now` automatically on every create.
 
-> **Note:** Setting `AUTOAPPROVE_ENTITY` on EPS has no effect — this var was moved to EPBO and renamed to `ENTITY_AUTO_APPROVE`.
-
 ### 5. Record not showing up in GET → `ENTITY_DEFAULT_VISIBILITY` not set on EPBO
 
 If `ENTITY_DEFAULT_VISIBILITY` is not set on EPBO, no visibility default is injected. Records arrive at EPS without `_visibility` and are stored without one. Depending on EPG visibility enforcement, they may be invisible. For local dev, set `ENTITY_DEFAULT_VISIBILITY=protected` in your EPBO env.
-
-> **Note:** Setting `VISIBILITY_ENTITY` on EPS has no effect — this var was moved to EPBO and renamed to `ENTITY_DEFAULT_VISIBILITY`.
 
 ### 6. 429 on local dev → rate limiter hit
 

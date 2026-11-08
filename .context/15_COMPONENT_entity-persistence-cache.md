@@ -254,7 +254,7 @@ When `enforceSerialisation` is absent or `false` (the default), wide-scope rules
 | High-volume kind cap (e.g. max 500,000 books) | `false` — global serialisation would bottleneck the system |
 | Per-user/per-kind cap with interpolatable scope | N/A — always locked per the interpolated dimensions, no flag needed |
 
-The practical overshoot when `enforceSerialisation: false` for a global limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable. For hard quotas at high volume where serialisation is also unacceptable, a MongoDB counter document with atomic `$inc` remains the correct solution and is out of scope for EPC.
+The practical overshoot when `enforceSerialisation: false` for a global limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable.
 
 ### Lock key source for PATCH requests
 

@@ -520,41 +520,6 @@ PATCH operations never trigger auto-approve regardless of configuration.
 | `_createdDateTime` | Set to `now` when absent (secondary injector — EPG is primary). No config. |
 | `_lastUpdatedDateTime` | Set to `now` when absent (secondary injector — EPG is primary). No config. |
 
-### EPS-to-EPBO Variable Migration Reference
-
-| Old EPS variable (removed) | New EPBO variable |
-|:---|:---|
-| `DEFAULT_ENTITY_KIND` | `ENTITY_DEFAULT_KIND` |
-| `DEFAULT_LIST_KIND` | `LIST_DEFAULT_KIND` |
-| `DEFAULT_RELATION_KIND` | `RELATION_DEFAULT_KIND` |
-| `DEFAULT_ENTITY_REACTION_KIND` | `ENTITY_REACTION_DEFAULT_KIND` |
-| `DEFAULT_LIST_REACTION_KIND` | `LIST_REACTION_DEFAULT_KIND` |
-| `VISIBILITY_ENTITY` | `ENTITY_DEFAULT_VISIBILITY` |
-| `VISIBILITY_ENTITY_FOR_{KIND}` | `ENTITY_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` |
-| `VISIBILITY_LIST` | `LIST_DEFAULT_VISIBILITY` |
-| `VISIBILITY_LIST_FOR_{KIND}` | `LIST_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` |
-| `VISIBILITY_ENTITY_REACTION` | `ENTITY_REACTION_DEFAULT_VISIBILITY` |
-| `VISIBILITY_ENTITY_REACTION_FOR_{KIND}` | `ENTITY_REACTION_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` |
-| `VISIBILITY_LIST_REACTION` | `LIST_REACTION_DEFAULT_VISIBILITY` |
-| `VISIBILITY_LIST_REACTION_FOR_{KIND}` | `LIST_REACTION_DEFAULT_VISIBILITY_FOR_{KIND_KEY}` |
-| `AUTOAPPROVE_ENTITY` | `ENTITY_AUTO_APPROVE` |
-| `AUTOAPPROVE_ENTITY_FOR_{KIND}` | `ENTITY_AUTO_APPROVE_FOR_{KIND_KEY}` |
-| `AUTOAPPROVE_LIST` | `LIST_AUTO_APPROVE` |
-| `AUTOAPPROVE_LIST_FOR_{KIND}` | `LIST_AUTO_APPROVE_FOR_{KIND_KEY}` |
-| `AUTOAPPROVE_LIST_ENTITY_RELATIONS` | `RELATION_AUTO_APPROVE` |
-| `AUTOAPPROVE_LIST_ENTITY_RELATIONS_FOR_{KIND}` | `RELATION_AUTO_APPROVE_FOR_{KIND_KEY}` |
-| `AUTOAPPROVE_ENTITY_REACTION` | `ENTITY_REACTION_AUTO_APPROVE` |
-| `AUTOAPPROVE_ENTITY_REACTION_FOR_{KIND}` | `ENTITY_REACTION_AUTO_APPROVE_FOR_{KIND_KEY}` |
-| `AUTOAPPROVE_LIST_REACTION` | `LIST_REACTION_AUTO_APPROVE` |
-| `AUTOAPPROVE_LIST_REACTION_FOR_{KIND}` | `LIST_REACTION_AUTO_APPROVE_FOR_{KIND_KEY}` |
-| `IDEMPOTENCY_ENTITY` | **Removed — no replacement.** Idempotency computation removed from the stack entirely. |
-| `IDEMPOTENCY_LIST` | **Removed — no replacement.** |
-| `IDEMPOTENCY_ENTITY_REACTION` | **Removed — no replacement.** |
-| `IDEMPOTENCY_LIST_REACTION` | **Removed — no replacement.** |
-| `IDEMPOTENCY_LIST_ENTITY_REL` | **Removed — no replacement.** |
-
-Where `{KIND_KEY}` = `{KIND}.toUpperCase().replace(/-/g, '_')`.
-
 ## entity-persistence-universal-orchestrator
 
 > **Note:** EPUO is **not part of the runtime chain**. The active request chain is EPG → EPBO → EPC → EPS. EPUO remains in the workspace as the template source from which EPBO was cloned. It is not started as part of normal service operation.

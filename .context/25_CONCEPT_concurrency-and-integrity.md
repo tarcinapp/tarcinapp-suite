@@ -27,8 +27,6 @@ This affects two features in EPS:
 | Uniqueness constraints | Two concurrent creates with the same unique key both succeed → duplicate records |
 | Record limits | C concurrent creates at the boundary all pass the `count < limit` check → up to C − 1 over-limit records |
 
-> **Idempotency note:** `_idempotencyKey` computation has been **removed from the stack** as part of the EPBO initiative. Idempotency is now a **client responsibility** — callers must supply an `X-Idempotency-Key` header. The Gateway's `AcquireLockForCreation` filter uses this header (when present) as the lock key, serialising concurrent requests with the same explicit idempotency key.
-
 ---
 
 ## Mitigation Layers
@@ -117,15 +115,18 @@ Currently EPS does not translate `E11000` errors to HTTP 409. This is a known ga
 
 ## Remaining Limitations
 
-### 1. Wide-scope record limits are best-effort
+### 1. Wide-scope record limits require opt-in serialisation
 
-EPC does not acquire a lock for record-limit rules whose scope contains **no interpolatable fields** (e.g. global cap `""`, or static kind cap `where[_kind]=book`). Serialising all creates in the entire collection on a single lock would be unacceptable in a multi-tenant environment.
+For record-limit rules whose scope contains **no interpolatable fields** (e.g. global cap `""`, or static kind cap `where[_kind]=book`), the lock key is identical for every create request regardless of who makes it. Acquiring that lock would serialise the entire collection globally — unacceptable by default under normal multi-tenant throughput, but correct and desirable for hard licence/seat caps or low-volume hard quotas.
 
-**Practical impact:** For a global limit of N with C concurrent writers at the boundary, the actual record count may reach N + (C − 1) before the checks converge.
+**EPC behaviour is opt-in, controlled by `enforceSerialisation` on the limit rule (configured in EPS):**
 
-**For deployments that require hard global limits:** A MongoDB counter document with atomic `findOneAndUpdate({scope, count: {$lt: limit}}, {$inc: {count: 1}})` is the correct solution. This is out of scope for the current EPC design.
+- `"enforceSerialisation": true` — EPC acquires a globally scoped lock for that rule, making the limit fully serialised and race-free.
+- `"enforceSerialisation": false` (default) — no lock is acquired for wide-scope rules; EPS's own count check is the sole gate (best-effort).
 
-**Documented behaviour (from EPS docs):** *"Limit counting is not atomic with the create operation (best-effort). For strict quotas in high-concurrency scenarios, consider database-level strategies."*
+When `enforceSerialisation` is absent or `false`, the practical overshoot for a global limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable.
+
+> **EPBO interaction:** Because `entity-persistence-base-orchestrator` (EPBO) sits before EPC in the chain and resolves computed fields (e.g. `_slug` from `_name`) before the request reaches EPC, wide-scope rules that reference computed fields in their scope — while uncommon — also benefit: all field values are present in the payload when EPC builds lock keys, whether `enforceSerialisation` is set or not.
 
 ### 2. EPC is an optional component
 
@@ -135,11 +136,9 @@ EPC must be deployed and inserted between the Gateway/Orchestrator and EPS for t
 
 EPS must never be exposed directly to clients (this is a core architectural constraint; see `21_CONCEPT_security-and-authorization.md`). If EPS is accessed directly — e.g. from an internal migration script or a mis-configured service — no gateway or EPC locks apply and all TOCTOU risks are present.
 
-### 4. Idempotency is client-supplied — not stack-computed
+### 4. Idempotency is client-supplied
 
-`_idempotencyKey` computation has been **removed from the stack entirely** as part of the EPBO initiative. EPS no longer derives an `_idempotencyKey` field from configured fields. Idempotency is now a **client responsibility**: callers may supply an `X-Idempotency-Key` request header. When present, the Gateway's `AcquireLockForCreation` filter uses this header value as the lock key (instead of a payload hash), serialising requests with the same explicit key.
-
-**What this means in practice:** Two requests that the client considers idempotent (same business operation, same idempotency key) will be serialised at the Gateway — the first succeeds and the second waits. If the client does not supply `X-Idempotency-Key`, the Gateway falls back to a SHA-256 hash of the raw request body; identical bodies are serialised, but logically equivalent bodies with minor differences are not.
+Idempotency is a client responsibility. Callers supply an `X-Idempotency-Key` request header; the Gateway's `AcquireLockForCreation` filter uses this value as the distributed lock key (instead of the payload hash), serialising concurrent requests with the same key. If the header is absent, the Gateway falls back to a SHA-256 hash of the raw request body — identical bodies are serialised, but logically equivalent bodies with minor differences are not.
 
 ---
 
@@ -151,7 +150,7 @@ EPS must never be exposed directly to clients (this is a core architectural cons
 | Different-payload same-key duplicate create | ⚠️ partial | — | ✅ (EPC required) | ✅ | ✅ (with index) |
 | Concurrent updates to same record | — | ✅ | — | — | — |
 | Per-user / per-kind record limit race | — | — | ✅ (EPC required) | ✅ (best-effort) | — |
-| Global / wide-scope record limit race | — | — | ❌ by design | ✅ (best-effort) | — |
+| Global / wide-scope record limit race | — | — | ✅ `enforceSerialisation:true` · ⚠️ best-effort otherwise | ✅ (best-effort) | — |
 | Client-supplied idempotency key collision | ✅ (header lock) | — | — | — | — |
 
 Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered by design · — Not applicable

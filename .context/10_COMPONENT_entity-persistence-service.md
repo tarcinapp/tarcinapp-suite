@@ -196,21 +196,9 @@ ENTITY_REACTION_KINDS=like,comment,rating,flag,review
 LIST_REACTION_KINDS=like,comment,rating,flag,review
 ```
 
-### Moved Concerns — Now Owned by EPBO
+> **Normalization is EPBO's responsibility.** Default `_kind`, default `_visibility`, `_validFromDateTime` auto-approve, `_validUntilDateTime` null-coercion, and `_slug` derivation are all computed by `entity-persistence-base-orchestrator` (EPBO) before the request reaches EPS. See [`16_COMPONENT_entity-persistence-base-orchestrator.md`](./16_COMPONENT_entity-persistence-base-orchestrator.md) and [`31_OPS_configuration-reference.md`](./31_OPS_configuration-reference.md) for the EPBO configuration schema. EPS is a pure schema-validating persistence store — it does not inject or compute these fields.
 
-> **As of the EPBO initiative**, the following normalization concerns have been removed from EPS and moved to `entity-persistence-base-orchestrator` (EPBO):
->
-> | Concern | Removed EPS vars | EPBO replacement |
-> |:---|:---|:---|
-> | Default `_kind` | `DEFAULT_ENTITY_KIND`, `DEFAULT_LIST_KIND`, `DEFAULT_RELATION_KIND`, `DEFAULT_ENTITY_REACTION_KIND`, `DEFAULT_LIST_REACTION_KIND` | `ENTITY_DEFAULT_KIND`, `LIST_DEFAULT_KIND`, etc. (EPBO-owned) |
-> | Default `_visibility` | `VISIBILITY_ENTITY[_FOR_{KIND}]`, `VISIBILITY_LIST[_FOR_{KIND}]`, etc. | `ENTITY_DEFAULT_VISIBILITY[_FOR_{KIND_KEY}]`, etc. (EPBO-owned) |
-> | Auto-approve `_validFromDateTime` | `AUTOAPPROVE_ENTITY[_FOR_{KIND}]`, `AUTOAPPROVE_LIST_ENTITY_RELATIONS`, etc. | `ENTITY_AUTO_APPROVE[_FOR_{KIND_KEY}]`, etc. (EPBO-owned) |
-> | `_slug` generation | (algorithmic, no env var) | Computed by EPBO from `slugify(_name)` |
-> | `_validUntilDateTime` null-coercion | (algorithmic, no env var) | Always set to explicit `null` when absent, by EPBO |
-> | `_idempotencyKey` computation | `IDEMPOTENCY_ENTITY`, `IDEMPOTENCY_LIST`, `IDEMPOTENCY_ENTITY_REACTION`, `IDEMPOTENCY_LIST_REACTION`, `IDEMPOTENCY_LIST_ENTITY_REL` | **Removed from the stack entirely.** Idempotency is now client-supplied via `X-Idempotency-Key` header. |
->
-> EPS no longer reads or acts on any of the above variables. Setting them on EPS has no effect.
-> See [`16_COMPONENT_entity-persistence-base-orchestrator.md`](./16_COMPONENT_entity-persistence-base-orchestrator.md) and [`31_OPS_configuration-reference.md`](./31_OPS_configuration-reference.md) for the current EPBO configuration schema.
+> **Idempotency is client-supplied.** There is no stack-level `_idempotencyKey` computation. Callers supply an `X-Idempotency-Key` request header; the Gateway uses it as the distributed lock key.
 
 ### Uniqueness Constraints
 
