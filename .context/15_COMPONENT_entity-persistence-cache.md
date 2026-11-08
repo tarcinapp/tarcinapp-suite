@@ -29,8 +29,8 @@ EPC is built incrementally in three phases:
 
 | Phase | Scope | Status |
 |:---|:---|:---|
-| **Phase 1** | Distributed locking (uniqueness + record-limit scope locks) | In progress |
-| **Phase 2** | Single-record (`findById`) GET response caching | Planned |
+| **Phase 1** | Distributed locking (uniqueness + record-limit scope locks) | In progress (pending merge) |
+| **Phase 2** | Single-record (`findById`) GET response caching | ✅ Complete |
 | **Phase 3** | Visitor (public + active) collection caching with TTL-only invalidation | Committed — see [Phase 3: Visitor Collection Caching](#phase-3-visitor-collection-caching) |
 
 ---
@@ -328,9 +328,7 @@ Step 3 (evict) must follow step 1 (read): evicting before reading would guarante
 
 ## Template Basis: `entity-persistence-universal-orchestrator`
 
-> **Java 21 prerequisite:** The orchestrator template currently targets Java 17 (`maven.compiler.release=17`, Quarkus 3.15.3). The template repository is being migrated to Java 21 before EPC is scaffolded. EPC clones the post-migration template and therefore targets Java 21 from day one (`maven.compiler.release=21`, Quarkus upgraded to a Java-21-compatible release). No mid-project JDK upgrade is needed. This aligns EPC with the Gateway, which already runs on Java 21.
-
-EPC is built by **cloning** `entity-persistence-universal-orchestrator` and replacing the pre/post-processor stubs with lock acquisition / release logic and findById caching. This choice was deliberate:
+EPC is built by **cloning** `entity-persistence-universal-orchestrator` (Java 21 / Quarkus 3.15.3) and replacing the pre/post-processor stubs with lock acquisition / release logic and findById caching. This choice was deliberate:
 
 | Reason | Detail |
 |:---|:---|
@@ -354,6 +352,19 @@ The EPC-specific additions on top of the orchestrator template are:
 7. Wiring each write PreProcessor (PUT/PATCH/DELETE on `/{id}`) to call `findByIdCacheService.evict(cacheKey)` before forwarding
 
 All routing, proxy, and pass-through logic is inherited unchanged from the template.
+
+### Count route startup ordering
+
+Camel Quarkus uses Vert.x as the HTTP layer. Vert.x resolves routes by **registration order** — not by path specificity — using a `TreeSet<RouteImpl>` sorted by integer order value. This means `GET /entities/{id}` can intercept `GET /entities/count` if it is registered first.
+
+`@Priority` annotations on `RouteBuilder` CDI beans do **not** affect Vert.x route registration order. Camel's `RegistryRoutesLoaders` collects `RoutesBuilder` beans from the CDI registry as an unordered `Set`; `@Priority` is never read during this step.
+
+The correct fix is Camel's **`startupOrder(int)`** DSL method on the route definition:
+- All five count routes (`/entities/count`, `/lists/count`, `/relations/count`, `/entity-reactions/count`, `/list-reactions/count`) declare `.startupOrder(1)` through `.startupOrder(5)`.
+- `findById` routes carry no explicit `startupOrder` and receive higher auto-incremented values.
+- Because Camel starts routes in ascending `startupOrder` order (`InternalRouteStartupManager` uses a `TreeMap<Integer, RouteStartupOrder>`), count routes' consumers call `VertxPlatformHttpConsumer.doStart()` first, registering their Vert.x routes before any `{id}` path-parameter route.
+
+This fix is applied identically in EPC, EPUO, and EPBO. `@Priority` annotations are removed from all 10 affected route files in each repo (they were misleading dead code).
 
 ---
 
