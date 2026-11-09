@@ -29,7 +29,7 @@ EPC is built incrementally in three phases:
 
 | Phase | Scope | Status |
 |:---|:---|:---|
-| **Phase 1** | Distributed locking (uniqueness + record-limit scope locks) | In progress (pending merge) |
+| **Phase 1** | Distributed locking (uniqueness + record-limit scope locks) | ✅ Complete |
 | **Phase 2** | Single-record (`findById`) GET response caching | ✅ Complete |
 | **Phase 3** | Visitor (public + active) collection caching with TTL-only invalidation | Committed — see [Phase 3: Visitor Collection Caching](#phase-3-visitor-collection-caching) |
 
@@ -104,20 +104,43 @@ Gateway Response
 
 ## Redis Infrastructure
 
-EPC requires its own dedicated Redis instance (`redis-epc`), separate from the Gateway's Redis (`redis-gateway`). The two instances have conflicting eviction requirements and must never be merged.
+EPC uses Redis for two purposes with **conflicting eviction requirements**: scope locks must never be evicted while held (`noeviction`), while cache entries are safe to evict under memory pressure (`allkeys-lfu`). EPC is designed to handle this with two independent Redis clients, each configurable separately.
 
-| Instance | Consumer | Purpose | Eviction policy | Persistence |
+### EPC Redis client model
+
+EPC has **two independent Redis clients** — they can point at the same instance or at different instances via env-var configuration alone (no code change):
+
+| Client | Env var | Used by | Purpose |
+|:---|:---|:---|:---|
+| Quarkus Redis client | `QUARKUS_REDIS_HOSTS` | `FindByIdCacheService` | findById response cache |
+| Redisson client | `EPC_REDIS_URL` | `LockService` | Scope locks |
+
+By default both inherit the same value (`epc.redis.url` defaults to `${quarkus.redis.hosts}`), so a single Redis instance is used out of the box — which is correct for development and acceptable for low-load deployments where the instance is sized so memory pressure never occurs while a lock is held (scope locks are held for < 1 second under normal conditions).
+
+### Redis instance topology options
+
+| Topology | When to use | Configuration |
+|:---|:---|:---|
+| **Single shared `redis-epc`** (default) | Development; low-load deployments where `redis-epc` is sized well above `#active_records × avg_record_bytes × 2` | `QUARKUS_REDIS_HOSTS` and `EPC_REDIS_URL` point at the same instance. Use `allkeys-lfu` policy and size `maxmemory` generously enough that eviction never occurs during a lock hold window. |
+| **Separate `redis-epc-locks` + `redis-epc-cache`** | Production under load; any deployment where memory pressure on the cache Redis is possible | `QUARKUS_REDIS_HOSTS=redis://redis-epc-cache:6379` (cache, `allkeys-lfu`); `EPC_REDIS_URL=redis://redis-epc-locks:6379` (locks, `noeviction`). |
+
+### Full instance inventory
+
+| Instance | Consumer | Purpose | Required eviction policy | Persistence |
 |:---|:---|:---|:---|:---|
-| `redis-gateway` | entity-persistence-gateway | Distributed locks, rate-limiting counters | `noeviction` | Disabled |
-| `redis-epc` | entity-persistence-cache | Scope locks, findById response cache | `allkeys-lfu` | Disabled |
+| `redis-gateway` | EPG | EPG distributed locks, rate-limiting counters | `noeviction` | Disabled |
+| `redis-epc-locks` | EPC `LockService` (Redisson) | Scope locks | `noeviction` | Disabled |
+| `redis-epc-cache` | EPC `FindByIdCacheService` (Quarkus Redis) | findById response cache | `allkeys-lfu` | Disabled |
 
-**Why separate instances:** Lock keys must never be evicted while held — `noeviction` is required for `redis-gateway`. Cache entries are safe to evict under memory pressure — LFU is optimal for `redis-epc`. These policies are mutually exclusive on a single instance.
+> **Development shortcut:** `redis-epc-locks` and `redis-epc-cache` are the same instance (`redis-epc` on `:6380`). This is safe in development because the instance is never under memory pressure. In production they must be separated — or `redis-epc` must be given a `maxmemory` large enough that `allkeys-lfu` eviction is never triggered while a scope lock is held.
 
-**Why persistence is disabled on both:** Lock keys auto-expire via `lease-time`; a lock key surviving a Redis restart would be stale. Cache entries rebuild on first read after a restart — a cold cache is operationally acceptable. Disabling persistence also eliminates RDB/AOF I/O overhead.
+**Why `noeviction` is required for lock keys:** `allkeys-lfu` evicts any key — including keys with a TTL that has not yet expired — when `maxmemory` is reached. A scope lock evicted mid-hold means a second concurrent writer will fail to see the lock and race past EPC's serialisation. This is a correctness defect, not just a performance issue.
 
-**Sentinel HA — Option B (deployment-time config):** Application source files (`application.properties`, `app-outbound.yml`) remain configured for single-node Redis. Sentinel connection config (`SPRING_DATA_REDIS_SENTINEL_MASTER`, `SPRING_DATA_REDIS_SENTINEL_NODES` for the Gateway; equivalent Quarkus sentinel properties for EPC) is supplied entirely at deployment time via Kubernetes ConfigMap / Secret or `docker-compose` `.env` overrides. No application code change is required to switch from single-node to Sentinel. Full documentation in `entity-persistence-gateway/.context/63-FEATURE-REDIS-SENTINEL-CONFIGURATION.md`. Integration tests continue to use single-node Redis.
+**Why persistence is disabled on all instances:** Lock keys auto-expire via `lease-time`; a lock key surviving a Redis restart would be stale and permanently block the corresponding scope. Cache entries rebuild on first read after a restart — a cold cache is operationally acceptable.
 
-**`maxmemory` sizing for `redis-epc`:** Estimate as `#active_records × avg_record_bytes × 2`. Set via `--maxmemory` flag at deployment time. See `32_OPS_deployment-kubernetes.md` for Helm command examples.
+**Sentinel HA — deployment-time config:** Application source files remain configured for single-node Redis. Sentinel/Cluster config is supplied entirely at deployment time via Kubernetes ConfigMap / Secret or `docker-compose` `.env` overrides. No application code change is required. Full documentation in `entity-persistence-gateway/.context/63-FEATURE-REDIS-SENTINEL-CONFIGURATION.md`. Integration tests continue to use single-node Redis.
+
+**`maxmemory` sizing for `redis-epc-cache`:** Estimate as `#active_records × avg_record_bytes × 2`. Set via `--maxmemory` flag at deployment time. See `32_OPS_deployment-kubernetes.md` for Helm command examples.
 
 ---
 
@@ -258,9 +281,11 @@ The practical overshoot when `enforceSerialisation: false` for a global limit of
 
 ### Lock key source for PATCH requests
 
-A PATCH payload contains only the fields the caller intends to change — the rest are absent. If the uniqueness rule references fields that are not in the payload (e.g. `_kind` and `_name` when only `foo` is being patched), `LockKeyBuilder` would fall back to `__missing__` placeholders for those dimensions. This does not create a correctness hole — `__missing__` causes over-serialisation (every PATCH on any record of that type is serialised regardless of actual overlap) — but it inflates unnecessary lock contention.
+A PATCH payload contains only the fields the caller intends to change — the rest are absent. If the uniqueness rule references fields that are not in the payload (e.g. `_kind` and `_name` when only `foo` is being patched), `LockKeyBuilder` would fall back to `__missing__` placeholders for those dimensions. Using `__missing__` causes over-serialisation — every PATCH on any record of that type is serialised regardless of whether they actually share a uniqueness dimension — inflating unnecessary lock contention.
 
 **The correct source for lock key building on PATCH paths is the post-patch state of the record** — i.e. the current stored record with the PATCH payload fields merged over it. EPC derives this by reading the full-field cached version of the record and merging the PATCH payload in memory.
+
+> **Why there is no stale-snapshot TOCTOU risk here:** A concern might arise that the fetched record is stale — i.e. another concurrent writer modified the same `_id` between EPC's fetch and EPC's lock acquisition, making the derived lock keys incorrect. This race is **structurally closed by the Gateway's `AcquireLockForUpdate` filter**, which acquires a per-record lock keyed on `{appShortcode}:lock-on-record-update:{id}` and holds it across the **entire downstream chain** (EPBO → EPC → EPS). Any second PATCH targeting the same `_id` is blocked at the Gateway until the first has fully committed and the Gateway lock is released. EPC's record fetch therefore always sees the true current state of the record — there is no concurrent writer that could have changed it between fetch and lock acquisition. EPC's scope locks serve a different purpose: they serialise concurrent writes that share a **uniqueness dimension** (e.g. same `_slug` + `_ownerUsers`) even when they target *different* record IDs (e.g. two concurrent POSTs).
 
 #### Why the full-field cache entry is available
 
@@ -341,15 +366,18 @@ EPC is built by **cloning** `entity-persistence-universal-orchestrator` (Java 21
 The EPC-specific additions on top of the orchestrator template are:
 
 **Phase 1 (locking):**
-1. A `LockService` CDI bean (wraps Redisson `RLockReactive`, constructs lock keys from config)
-2. A `ConfigCacheService` CDI bean (Caffeine cache wrapping EPS `/system-info` call)
-3. A `LockKeyBuilder` utility (parses uniqueness/limit scope strings, interpolates field values)
-4. Wiring each create/update/delete PreProcessor to call `lockService.acquireLock(...)` and each PostProcessor to call `lockService.releaseLock(...)`
+1. A `LockService` CDI bean — wraps Redisson blocking `RLock.tryLock(waitTime, leaseTime, TimeUnit)`, which is safe on Camel worker threads (not event-loop threads); constructs lock keys from config
+2. A `ConfigCacheService` CDI bean — Caffeine in-process cache (10 s TTL) wrapping EPS `/system-info` call; provides uniqueness and record-limit config to lock key builders
+3. A `LockKeyBuilder` utility — parses uniqueness/limit scope strings, extracts interpolation dimensions, builds one lock key per array-element combination
+4. A `PatchMergeHelper` CDI bean — fetches the current stored record (from findById cache or direct EPS GET via `EpsClient.getRecordById`), performs a shallow non-mutating overlay of the PATCH payload, and returns the merged `JsonNode` used for lock key interpolation on PATCH paths
+5. `EpsClient` extended with `getRecordById(recordType, id)` — used by `PatchMergeHelper` on cache miss to fetch the current record directly from EPS over localhost loopback
+6. Wiring `AbstractWriteLockPreProcessor` to: (a) call `beforeLocks()` for pre-lock housekeeping, (b) read the merged node from the `epc.patch.merged.node` exchange property set by PATCH pre-processors, (c) acquire all lock keys, (d) store lock handles on the exchange for release in the post-processor
+7. All five `Update*ByIdPreProcessor` classes wired with `PatchMergeHelper`: fetch → merge → evict cache → stash merged node → (base class) acquire locks
 
 **Phase 2 (findById caching):**
-5. A `FindByIdCacheService` CDI bean (Redis-backed by-ID GET response cache; stores response body + selected headers)
-6. Wiring each `GET /{recordType}/{id}` PreProcessor to check `findByIdCacheService.get(cacheKey)` and short-circuit on hit; PostProcessor to call `findByIdCacheService.put(cacheKey, body, headers, ttl)`
-7. Wiring each write PreProcessor (PUT/PATCH/DELETE on `/{id}`) to call `findByIdCacheService.evict(cacheKey)` before forwarding
+8. A `FindByIdCacheService` CDI bean (Redis-backed by-ID GET response cache; stores response body + selected headers)
+9. Wiring each `GET /{recordType}/{id}` PreProcessor to check `findByIdCacheService.get(cacheKey)` and short-circuit on hit; PostProcessor to call `findByIdCacheService.put(cacheKey, body, headers, ttl)`
+10. Wiring each write PreProcessor (PUT/PATCH/DELETE on `/{id}`) to call `findByIdCacheService.evict(cacheKey)` before forwarding
 
 All routing, proxy, and pass-through logic is inherited unchanged from the template.
 
@@ -490,14 +518,16 @@ If specific workflows require **read-your-write consistency** (e.g. the writer's
 
 **Write operation ordering in PATCH PreProcessor:** The required order for PATCH (update-by-id) is defined in full in [Complete PATCH PreProcessor operation order](#complete-patch-preprocessor-operation-order). In summary:
 1. Read full-field cache entry; on miss fall through to EPS
-2. Merge PATCH payload over fetched record
+2. Merge PATCH payload over fetched record → merged `JsonNode` (used **only** for lock key interpolation — never written back to cache or forwarded to EPS; the original sparse PATCH body is what EPS receives)
 3. Evict findById cache entry (`DEL` wildcard)
 4. Acquire scope locks using merged record
-5. Forward write to EPS
+5. Forward **original** PATCH body to EPS
 
 For non-PATCH writes (PUT, DELETE by id), steps 1 and 2 are omitted — no merge is needed. The order for those operations is: evict → acquire lock → forward.
 
 Placing eviction before lock acquisition (step 3 before step 4) is mandatory: reversing them creates a window where a concurrent reader re-populates the cache with a stale response between lock acquisition and write completion.
+
+**Why there is no TOCTOU risk in the PATCH record fetch:** The Gateway's `AcquireLockForUpdate` filter holds a per-record lock (`{appShortcode}:lock-on-record-update:{id}`) across the full downstream chain for the duration of the PATCH. A second concurrent PATCH to the same `_id` cannot enter EPC until the first has fully committed. EPC's record fetch (step 1) therefore always reads the true current state — no concurrent writer can have changed it between fetch and lock acquisition. See [Lock key source for PATCH requests](#lock-key-source-for-patch-requests) for the full analysis.
 
 **Redis unavailability:**
 - **Locks** — fail fast, return `503 Service Unavailable`. Lock acquisition is required for correctness; degrading silently would allow TOCTOU races.
@@ -671,7 +701,8 @@ Span events added to the Camel route span: `cache.hit`, `cache.miss`, `cache.byp
 | `epc.cache.ttl.list-reaction.kinds.{kind}` | `EPC_CACHE_TTL_LIST_REACTION_KINDS_{KIND}` | _(inherits type TTL)_ | Per-kind TTL override for list-reactions (level 1) |
 | `epc.visitor-cache.enabled` | `EPC_VISITOR_CACHE_ENABLED` | `false` | Phase 3 master switch — when `true`, visitor collection GET responses are cached with TTL-only invalidation. Sourced from a refreshable config source; takes effect immediately without restart. |
 | `epc.visitor-cache.ttl` | `EPC_VISITOR_CACHE_TTL` | `30s` | TTL for Phase 3 visitor collection cache entries. Refreshable at runtime — applies to new writes only; existing Redis entries retain their original TTL until expiry. |
-| `quarkus.redis.hosts` | `QUARKUS_REDIS_HOSTS` | `redis://localhost:6379` | Redis connection URL. Use `rediss://` scheme for TLS. Example with auth: `rediss://:password@redis-epc:6380` |
+| `quarkus.redis.hosts` | `QUARKUS_REDIS_HOSTS` | `redis://localhost:6379` | Redis URL for the **findById cache client** (Quarkus Redis / `FindByIdCacheService`). Use `rediss://` for TLS; include password as `rediss://:password@host:port`. In production, point this at a dedicated `allkeys-lfu` Redis instance. |
+| `epc.redis.url` | `EPC_REDIS_URL` | _(inherits `QUARKUS_REDIS_HOSTS`)_ | Redis URL for the **scope lock client** (Redisson / `LockService`). Defaults to the same value as `quarkus.redis.hosts` — both clients share one instance by default. In production, point this at a dedicated `noeviction` Redis instance to guarantee lock keys are never evicted while held. |
 
 ---
 
