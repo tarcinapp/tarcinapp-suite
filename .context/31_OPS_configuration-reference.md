@@ -542,7 +542,7 @@ MicroProfile Config convention: `property.key` → `PROPERTY_KEY` (dots/hyphens 
 | `quarkus.otel.exporter.otlp.endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
 | `quarkus.otel.propagators` | _(config only)_ | `tracecontext,baggage,b3,b3multi` | Trace propagators (W3C + B3 for Instana/Zipkin compatibility) |
 | `quarkus.log.level` | `QUARKUS_LOG_LEVEL` | `INFO` | Root log level |
-| `quarkus.log.category."io.tarcinapp".level` | _(set in `application.properties`)_ | `DEBUG` | Application code log level (tarcinapp package only) |
+| `quarkus.log.category."com.tarcinapp".level` | _(set in `application.properties`)_ | `DEBUG` | Application code log level (tarcinapp package only) |
 | `quarkus.log.category."org.apache.camel".level` | _(set in `application.properties`)_ | `INFO` | Apache Camel framework log level |
 
 > **`GATEWAY_BASE_URL` vs `quarkus.rest-client` URL:** `GATEWAY_BASE_URL` is the simpler override — it is the standard env var to set in most deployments. The full `quarkus.rest-client."entity-persistence-gateway".url` property only needs to be set directly if you need to override without `GATEWAY_BASE_URL` (e.g. in test profiles).

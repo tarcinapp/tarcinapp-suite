@@ -367,7 +367,7 @@ Option 2 is an advanced pattern and adds significant operational complexity. Pre
    }
    ```
 
-4.5. **CDI scan** — Quarkus Arc auto-discovers `@ApplicationScoped` beans in all packages under the root package. If you add processors in a new sub-package (e.g. `io.tarcinapp.orchestrator.processors.custom`), they are picked up automatically. You only need to register the package explicitly if you move outside the root package or use a non-standard project layout.
+4.5. **CDI scan** — Quarkus Arc auto-discovers `@ApplicationScoped` beans in all packages under the root package. If you add processors in a new sub-package (e.g. `com.tarcinapp.orchestrator.processors.custom`), they are picked up automatically. You only need to register the package explicitly if you move outside the root package or use a non-standard project layout.
 
 5. **Selective implementation** — you only need to add logic to the processors that matter for your use case. If you only need custom behavior on entity creation, only implement `CreateEntityPreProcessor` and `CreateEntityPostProcessor`. All other processor classes have **empty bodies** and are **transparent pass-throughs with zero overhead**. There is no penalty for leaving processors unimplemented.
 

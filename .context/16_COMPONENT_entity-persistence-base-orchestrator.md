@@ -404,7 +404,7 @@ EPBO is built on the same **RouteBuilder + PreProcessor + PostProcessor** scaffo
 | Aspect | EPUO (template source) | EPBO (this service) |
 |:---|:---|:---|
 | `artifactId` | `entity-persistence-universal-orchestrator` | `entity-persistence-base-orchestrator` |
-| Java package | `io.tarcinapp.orchestrator` | `io.tarcinapp.epbo` |
+| Java package | `com.tarcinapp.orchestrator` | `com.tarcinapp.epbo` |
 | Default port | `8079` | `3002` |
 | Backend target | `http://localhost:3001` (EPC) | `http://localhost:3001` (EPC — same) |
 | `gateway.base-url` | `http://localhost:8081` | **removed** |

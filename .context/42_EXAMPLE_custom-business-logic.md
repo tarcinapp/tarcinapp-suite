@@ -109,7 +109,7 @@ In the implementation below, both cases result in a **silent skip** (the enrichm
 If `authorCountry` is **mandatory** (e.g., business rules require every book to have it), the processor should short-circuit with a 422 instead — see the hard-fail pattern in the Error Handling section below.
 
 ```java
-package io.tarcinapp.orchestrator.processors.entities;
+package com.tarcinapp.orchestrator.processors.entities;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -121,7 +121,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
-import io.tarcinapp.orchestrator.gateway.EntityPersistenceClient;
+import com.tarcinapp.orchestrator.gateway.EntityPersistenceClient;
 
 import java.util.logging.Logger;
 
@@ -250,7 +250,7 @@ EPS :3000
 The `EntityPersistenceClient` interface ships with the orchestrator template and covers all EPS endpoints. Verify it contains at minimum the methods you need, and extend it if necessary. The complete interface signature for the five most commonly used methods:
 
 ```java
-package io.tarcinapp.orchestrator.gateway;
+package com.tarcinapp.orchestrator.gateway;
 
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -559,7 +559,7 @@ To trigger a notification after a book is created, implement `CreateEntityPostPr
 4. Adds a custom response header `X-Notification-Sent: true`
 
 ```java
-package io.tarcinapp.orchestrator.processors.entities;
+package com.tarcinapp.orchestrator.processors.entities;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -568,7 +568,7 @@ import jakarta.inject.Inject;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 
-import io.tarcinapp.orchestrator.services.NotificationService;
+import com.tarcinapp.orchestrator.services.NotificationService;
 
 import java.util.logging.Logger;
 
@@ -626,7 +626,7 @@ public class CreateEntityPostProcessor implements Processor {
 **NotificationService stub (CDI bean):**
 
 ```java
-package io.tarcinapp.orchestrator.services;
+package com.tarcinapp.orchestrator.services;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import java.util.logging.Logger;
@@ -674,7 +674,7 @@ Add the test dependency to `pom.xml`:
 **Example: `@QuarkusTest` that verifies body enrichment**
 
 ```java
-package io.tarcinapp.orchestrator.processors.entities;
+package com.tarcinapp.orchestrator.processors.entities;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
@@ -689,7 +689,7 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import io.tarcinapp.orchestrator.gateway.EntityPersistenceClient;
+import com.tarcinapp.orchestrator.gateway.EntityPersistenceClient;
 
 import static org.junit.jupiter.api.Assertions.*;
 

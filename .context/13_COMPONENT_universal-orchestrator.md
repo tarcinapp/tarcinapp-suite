@@ -531,7 +531,7 @@ All keys can be overridden via environment variables using the MicroProfile Conf
 | `quarkus.otel.propagators` | — | `tracecontext,baggage,b3,b3multi` | Trace propagation formats |
 | `quarkus.otel.resource.attributes` | — | `service.name=entity-persistence-universal-orchestrator` | APM service label |
 | `quarkus.log.level` | — | `INFO` | Root log level |
-| `quarkus.log.category."io.tarcinapp".level` | — | `DEBUG` | Tarcinapp package log level |
+| `quarkus.log.category."com.tarcinapp".level` | — | `DEBUG` | Tarcinapp package log level |
 
 **Dev-mode profile** (`%dev`): OTel disabled, `backend.base-url=http://localhost:3000`, `gateway.base-url=http://localhost:8080`.  
 **Test-mode profile** (`%test`): OTel disabled, backend health check disabled.
