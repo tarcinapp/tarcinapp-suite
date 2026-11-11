@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Examples — Tarcinapp Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-mark">T</span>
+      <span class="logo-text">arcinapp<span class="logo-suite"> Suite</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="concepts.html">Concepts</a></li>
+      <li><a href="components.html">Components</a></li>
+      <li class="has-dropdown">
+        <a href="resources.html">Resources ▾</a>
+        <ul class="dropdown">
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="examples.html">Examples</a></li>
+          <li><a href="configuration.html">Configuration Reference</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="https://github.com/tarcinapp" class="btn-github" target="_blank" rel="noopener">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <span class="doc-sidebar-title">Examples</span>
+    <a href="#books-app">Books App</a>
+    <a href="#adding-a-kind">Adding a New Kind</a>
+    <a href="#custom-logic">Custom Business Logic</a>
+    <span class="doc-sidebar-title">Patterns</span>
+    <a href="#hierarchy">Hierarchy: chapters</a>
+    <a href="#relations">Relations: shelves</a>
+    <a href="#reactions">Reactions: reviews</a>
+    <a href="#bookmarks">Toggle: bookmarks</a>
+    <a href="#approval">Approval Workflow</a>
+  </aside>
+
+  <div class="doc-main">
+    <div class="page-header">
+      <div class="page-breadcrumb"><a href="index.html">Home</a> / <a href="resources.html">Resources</a> / Examples</div>
+          <h1>Examples</h1>
+          <p>Real-world walkthroughs showing how to configure Tarcinapp for specific use cases.</p>
+    </div>
+
+  <main class="doc-content prose">
+
+    <!-- ── BOOKS APP ─────────────────────────────────────────────────────── -->
+    <h2 id="books-app">Books App — End-to-End</h2>
+    <p>The canonical Tarcinapp example. A books application with multi-role access, hierarchical chapters, shelves, and reviews — all from configuration, no code.</p>
+
+    <h3>Domain Design</h3>
+    <p>The books app uses these record types:</p>
+    <table>
+      <thead><tr><th>Resource</th><th>Record Type</th><th><code>_kind</code></th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Books</td><td>Entity</td><td><code>book</code></td><td>Primary domain object with <code>author</code>, <code>isbn</code>, <code>genre</code> fields</td></tr>
+        <tr><td>Authors</td><td>Entity</td><td><code>author</code></td><td>Separate entity; linked to books via <code>publisherId</code> / lookup</td></tr>
+        <tr><td>Chapters</td><td>Entity</td><td><code>chapter</code></td><td>Child entities of books via <code>_parents</code></td></tr>
+        <tr><td>Shelves</td><td>List</td><td><code>shelf</code></td><td>Containers for books; users create personal shelves</td></tr>
+        <tr><td>Book-in-Shelf</td><td>Relation</td><td><code>book-in-shelf</code></td><td>The join record when a book is added to a shelf</td></tr>
+        <tr><td>Reviews</td><td>EntityReaction</td><td><code>review</code></td><td>User reactions on books; supports threaded replies</td></tr>
+        <tr><td>Ratings</td><td>EntityReaction</td><td><code>rating</code></td><td>Numeric rating; uniqueness: one per user per book</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Step 1: Configure EPS</h3>
+    <pre><code># Allowed kinds
+ENTITY_KINDS=book,author,chapter
+LIST_KINDS=shelf
+LIST_ENTITY_REL_KINDS=book-in-shelf
+ENTITY_REACTION_KINDS=review,rating,bookmark
+
+# Uniqueness: no duplicate books by same user (same slug)
+ENTITY_UNIQUENESS="where[_kind]=${_kind}&where[_slug]=${_slug}&where[_createdBy]=${_createdBy}"
+
+# One rating per user per book
+ENTITY_REACTION_UNIQUENESS="where[_kind]=rating&where[_entityId]=${_entityId}&sets[owners][userIds]=${_createdBy}"
+
+# Books need approval; shelves and reviews auto-approve
+AUTOAPPROVE_ENTITY=false
+AUTOAPPROVE_LIST=true
+AUTOAPPROVE_ENTITY_REACTION=true
+
+# Default visibility
+VISIBILITY_ENTITY=protected
+VISIBILITY_LIST=private</code></pre>
+
+    <h3>Step 2: Configure the Gateway</h3>
+    <pre><code>app:
+  name: books-app
+  shortcode: books
+  kindAliasPaths:
+    # Books (Entity) — with JSON schema
+    - alias: books
+      name: book
+      schema: |
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["author"],
+          "properties": {
+            "author":  {"type": "string", "minLength": 1},
+            "isbn":    {"type": "string", "pattern": "^[0-9-]{10,17}$"},
+            "genre":   {"type": "string"},
+            "pages":   {"type": "integer", "minimum": 1}
+          }
+        }
+      # Named queries
+      queries:
+        - name: my
+          query: "sets[owners][userIds]=${sub}"
+        - name: by-genre-scifi
+          query: "filter[where][genre]=sci-fi"
+      # Named field sets
+      fieldSets:
+        - name: summary
+          fields: "_id,_name,_visibility,author,genre"
+        - name: full
+          fields: "*"
+      # Hierarchy alias for chapters
+      hierarchyAlias: chapters
+      hierarchyName: chapter
+
+    # Shelves (List)
+    - alias: shelves
+      name: shelf
+
+    # Authors (Entity)
+    - alias: authors
+      name: author
+
+    # Reviews (EntityReaction)
+    - alias: reviews
+      name: review
+
+    # Ratings (EntityReaction)
+    - alias: ratings
+      name: rating</code></pre>
+
+    <h3>Step 3: API Calls Walkthrough</h3>
+
+    <h4>Create a book (as member)</h4>
+    <pre><code>curl -X POST http://localhost:8081/api/v1/books \
+  -H "Authorization: Bearer $MEMBER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "_name": "The Great Gatsby",
+    "author": "F. Scott Fitzgerald",
+    "genre": "classic",
+    "isbn": "978-0743273565"
+  }'
+
+# Response: 201 Created
+# Note: _validFromDateTime is null → book is PENDING (needs admin approval)</code></pre>
+
+    <h4>Approve the book (as admin)</h4>
+    <pre><code>curl -X PATCH http://localhost:8081/api/v1/books/{bookId} \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"_validFromDateTime": "2024-01-01T00:00:00Z"}'
+
+# Response: 200 OK — book is now ACTIVE and visible to others</code></pre>
+
+    <h4>Create a shelf and add a book</h4>
+    <pre><code># Create a shelf
+curl -X POST http://localhost:8081/api/v1/shelves \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"_name": "My Favorites", "_visibility": "private"}'
+
+# Add a book to the shelf (creates a list-entity-relation behind the scenes)
+curl -X POST "http://localhost:8081/api/v1/shelves/{shelfId}/entities/books" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"addedNote": "This changed my perspective"}'
+
+# List books in the shelf
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8081/api/v1/shelves/{shelfId}/entities/books"</code></pre>
+
+    <h4>Create chapters (hierarchy)</h4>
+    <pre><code>curl -X POST "http://localhost:8081/api/v1/books/{bookId}/chapters" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "_name": "Chapter 1: The Valley of Ashes",
+    "pageStart": 1,
+    "pageEnd": 18
+  }'
+
+# List chapters of a book
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8081/api/v1/books/{bookId}/chapters"</code></pre>
+
+    <h4>Write a review</h4>
+    <pre><code>curl -X POST "http://localhost:8081/api/v1/books/{bookId}/reactions/reviews" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "_name": "A timeless masterpiece",
+    "body": "Fitzgerald captures the hollow decadence of the Jazz Age perfectly.",
+    "rating": 5
+  }'</code></pre>
+
+    <!-- ── ADDING A KIND ──────────────────────────────────────────────────── -->
+    <h2 id="adding-a-kind">Adding a New Kind</h2>
+    <p>This checklist applies every time you introduce a new resource type. Uses the books app as the starting point — adding a <code>publisher</code> entity.</p>
+
+    <div class="callout callout-success">
+      <p><strong>No code required.</strong> A new <code>_kind</code> is always a configuration-only change. New code is only needed if the new kind requires custom business logic beyond what JSON Schema validation covers.</p>
+    </div>
+
+    <h3>The Checklist</h3>
+    <ol>
+      <li>Decide the <strong>record type</strong>: Entity, List, Relation, or Reaction</li>
+      <li>Consider if you need <strong>hierarchy</strong> (only Entities support <code>_parents</code>)</li>
+      <li>Consider if you need <strong>traversal access</strong> (e.g., <code>/books/{id}/reactions/reviews</code>)</li>
+      <li>Add the <code>_kind</code> to EPS <code>ENTITY_KINDS</code> (or variant) → restart EPS</li>
+      <li>Add a kind alias in the gateway (<code>APP_KINDALIASPATHS_N_*</code>) → restart gateway</li>
+      <li>Optionally add JSON Schema, uniqueness rules, record limits, rate limiter</li>
+      <li>Test the new endpoint</li>
+      <li>Verify in the GUI (the new resource appears in the sidebar after reconnect)</li>
+    </ol>
+
+    <h3>Example: Adding <code>publisher</code> Entity</h3>
+    <pre><code># EPS — add to ENTITY_KINDS (and restart EPS)
+ENTITY_KINDS=book,author,chapter,publisher
+
+# Optional: globally unique publisher names (across all users)
+ENTITY_UNIQUENESS="where[_kind]=${_kind}&where[_slug]=${_slug}&where[_createdBy]=${_createdBy},where[_kind]=publisher&where[_slug]=${_slug}"</code></pre>
+    <pre><code># Gateway — add kind alias (and restart gateway)
+APP_KINDALIASPATHS_5_ALIAS=publishers
+APP_KINDALIASPATHS_5_NAME=publisher
+APP_KINDALIASPATHS_5_SCHEMA={"type":"object","required":["country"],"properties":{"country":{"type":"string","minLength":2},"founded":{"type":"integer","minimum":1400}}}</code></pre>
+    <pre><code># Test
+curl -X POST http://localhost:8081/api/v1/publishers \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"_name": "Penguin Books", "country": "UK", "founded": 1935}'
+
+# Verify schema validation
+curl -X POST http://localhost:8081/api/v1/publishers \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"_name": "Missing Country"}'
+# Expected: 422 ValidationError — country is required</code></pre>
+
+    <h3>What Requires a Restart</h3>
+    <table>
+      <thead><tr><th>Change</th><th>EPS restart</th><th>Gateway restart</th></tr></thead>
+      <tbody>
+        <tr><td>Add new allowed kind</td><td>✓ Yes</td><td>No</td></tr>
+        <tr><td>Add uniqueness rule</td><td>✓ Yes</td><td>No</td></tr>
+        <tr><td>Add record limit</td><td>✓ Yes</td><td>No</td></tr>
+        <tr><td>Change auto-approve / visibility default</td><td>✓ Yes</td><td>No</td></tr>
+        <tr><td>Add kind alias</td><td>No</td><td>✓ Yes</td></tr>
+        <tr><td>Add JSON schema</td><td>No</td><td>✓ Yes</td></tr>
+        <tr><td>Add rate limiter</td><td>No</td><td>✓ Yes</td></tr>
+        <tr><td>Add saved query / fieldset</td><td>No</td><td>✓ Yes</td></tr>
+        <tr><td>Add hierarchy alias</td><td>No</td><td>✓ Yes</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── CUSTOM LOGIC ───────────────────────────────────────────────────── -->
+    <h2 id="custom-logic">Custom Business Logic</h2>
+    <p>When JSON Schema validation isn't enough — you need to call an external service, enforce a quota that spans multiple records, or emit an async event after a write — implement the logic in the Orchestration Layer.</p>
+
+    <h3>Workflow</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Fork the universal-orchestrator template</h3>
+          <pre><code>git clone https://github.com/tarcinapp/entity-persistence-universal-orchestrator.git my-product-orchestrator
+cd my-product-orchestrator</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Implement your PreProcessor</h3>
+          <p>For every endpoint, there is a route class (e.g., <code>CreateEntityRoute.java</code>). Override the <code>PreProcessor</code> class for the route you want to customize:</p>
+          <pre><code>// Example: ISBN enrichment via external API
+@ApplicationScoped
+public class CreateBookPreProcessor implements PreProcessor {
+
+  @Override
+  public void process(Exchange exchange) throws Exception {
+    // Read the kind from the header injected by the Gateway
+    String kind = exchange.getIn().getHeader("X-Tapp-Kind", String.class);
+    if (!"book".equals(kind)) return;  // only run for book creates
+
+    // Get the request body
+    Map&lt;String, Object&gt; body = exchange.getIn().getBody(Map.class);
+    String isbn = (String) body.get("isbn");
+
+    if (isbn != null) {
+      // Call external ISBN API and enrich
+      BookInfo info = isbnService.lookup(isbn);
+      body.put("pageCount", info.getPageCount());
+      body.put("publishYear", info.getYear());
+      exchange.getIn().setBody(body);
+    }
+  }
+}</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Wire the Gateway to use the orchestrator</h3>
+          <pre><code>app:
+  backend:
+    host: http://localhost:8082  # ← Point to orchestrator, not EPS directly</code></pre>
+          <p>The orchestrator forwards to EPS internally. The Gateway only talks to the orchestrator.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>Test end-to-end</h3>
+          <pre><code>curl -X POST http://localhost:8081/api/v1/books \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"_name": "Clean Code", "author": "Robert C. Martin", "isbn": "978-0132350884"}'
+
+# Expected: pageCount and publishYear are in the response,
+# injected by your PreProcessor from the ISBN API</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PATTERNS ───────────────────────────────────────────────────────── -->
+    <h2 id="hierarchy">Pattern: Hierarchy (chapters of a book)</h2>
+    <pre><code># Gateway config: enable hierarchy alias on books
+APP_KINDALIASPATHS_0_ALIAS=books
+APP_KINDALIASPATHS_0_NAME=book
+APP_KINDALIASPATHS_0_HIERARCHYALIAS=chapters
+APP_KINDALIASPATHS_0_HIERARCHYNAME=chapter
+
+# Routes created:
+# GET  /api/v1/books/{id}/chapters    ← list children
+# POST /api/v1/books/{id}/chapters    ← create child with _kind=chapter and _parents set automatically</code></pre>
+
+    <h2 id="relations">Pattern: Relations (books in shelves)</h2>
+    <pre><code># Add a book to a shelf — creates a list-entity-relation
+curl -X POST "http://localhost:8081/api/v1/shelves/{shelfId}/entities/books" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"position": 1, "addedNote": "Top pick"}'
+
+# Query books in a shelf with traversal
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8081/api/v1/shelves/{shelfId}/entities/books?limit=10"
+
+# The response includes _fromMetadata (shelf info) and _toMetadata (book info)
+# on each item, giving you denormalized join-record metadata.</code></pre>
+
+    <h2 id="reactions">Pattern: Reactions (reviews on books)</h2>
+    <pre><code># Post a review on a book
+curl -X POST "http://localhost:8081/api/v1/books/{bookId}/reactions/reviews" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"_name": "Loved it", "body": "...", "score": 5}'
+
+# List all reviews for a book
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8081/api/v1/books/{bookId}/reactions/reviews"
+
+# Reply to a review (threaded reaction via _parents)
+curl -X POST "http://localhost:8081/api/v1/books/{bookId}/reactions/reviews" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "_name": "Reply",
+    "_parents": ["tapp://localhost/entity-reaction/{reviewId}"]
+  }'</code></pre>
+
+    <h2 id="bookmarks">Pattern: Toggle Reaction (bookmarks)</h2>
+    <pre><code># EPS: one bookmark per user per book (uniqueness enforcement)
+ENTITY_REACTION_KINDS=review,rating,bookmark
+ENTITY_REACTION_UNIQUENESS="where[_kind]=bookmark&where[_entityId]=${_entityId}&sets[owners][userIds]=${_createdBy}"</code></pre>
+    <pre><code># Toggle pattern:
+# First POST → 201 Created → bookmark added
+# Second POST → 409 Conflict (UNIQUENESS-VIOLATION) → already bookmarked
+# To unbookmark: GET /bookmarks?filter[where][_entityId]={bookId}&q=my → get the ID → DELETE /bookmarks/{id}
+
+curl -X POST "http://localhost:8081/api/v1/books/{bookId}/reactions/bookmarks" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"note": "Read for the book club"}'</code></pre>
+
+    <h2 id="approval">Pattern: Approval Workflow</h2>
+    <pre><code># EPS: books require approval (no auto-approve)
+AUTOAPPROVE_ENTITY=false
+
+# Member creates a book → it's PENDING
+# Only the owner and admin/editor can see pending records
+
+# Admin approves by setting _validFromDateTime
+# (Requires tarcinapp.fields.entities._validFromDateTime.create role)
+curl -X PATCH http://localhost:8081/api/v1/books/{bookId} \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"_validFromDateTime": "2024-01-01T00:00:00Z"}'
+
+# To reject (soft-delete) a book without approving it:
+curl -X PATCH http://localhost:8081/api/v1/books/{bookId} \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"_validUntilDateTime": "2020-01-01T00:00:00Z"}'
+# The book moves to EXPIRED state → effectively rejected
+
+# Query pending records (admin only)
+curl -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://localhost:8081/api/v1/books?sets[pendings]=true"</code></pre>
+
+  </main>
+  </div><!-- /.doc-main -->
+</div><!-- /.doc-layout -->
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark">T</span>
+      <span class="footer-name">Tarcinapp Suite</span>
+      <span class="footer-tagline">Backend-as-configuration for SaaS builders</span>
+    </div>
+    <nav class="footer-nav">
+      <div class="footer-col">
+        <span class="footer-col-title">Documentation</span>
+        <a href="architecture.html">Architecture</a>
+        <a href="concepts.html">Concepts</a>
+        <a href="components.html">Components</a>
+        <a href="configuration.html">Configuration</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">Resources</span>
+        <a href="getting-started.html">Getting Started</a>
+        <a href="examples.html">Examples</a>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">Tarcinapp Suite is actively developed. Docs evolve with the suite.</div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

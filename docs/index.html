@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tarcinapp Suite — Backend-as-Configuration for SaaS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<!-- ─── NAV ─────────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-mark">T</span>
+      <span class="logo-text">arcinapp<span class="logo-suite"> Suite</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="concepts.html">Concepts</a></li>
+      <li><a href="components.html">Components</a></li>
+      <li class="has-dropdown">
+        <a href="resources.html">Resources ▾</a>
+        <ul class="dropdown">
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="examples.html">Examples</a></li>
+          <li><a href="configuration.html">Configuration Reference</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="https://github.com/tarcinapp" class="btn-github" target="_blank" rel="noopener">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── HERO ─────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-bg-grid"></div>
+  <div class="container">
+    <div class="hero-badge">🚧 Early Access · Actively Developed</div>
+
+    <div class="hero-split">
+      <div class="hero-split-left">
+        <h1 class="hero-title">
+          Give it a schema.<br/>
+          <span class="gradient-text">Get a full backend.</span>
+        </h1>
+        <p class="hero-subtitle">
+          Tarcinapp Suite is SaaS infrastructure for the age of AI-assisted development. You describe your resource with a JSON Schema — Tarcinapp delivers the full production backend: REST operations, authentication, authorization, rate limiting, distributed locking, multi-tenancy, pagination, and a live OpenAPI spec that AI agents, human developers, and the self-rendering admin UI all consume directly.
+        </p>
+
+        <div class="hero-pills">
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Full CRUD REST API</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> JWT Authentication</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Fine-Grained Authz</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Rate Limiting</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Distributed Locking</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Multi-Tenancy</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Pagination &amp; Filtering</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Lifecycle Management</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Field-Level Masking</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> AI-Ready OpenAPI Spec</span>
+          <span class="hero-pill"><span class="hero-pill-check">✓</span> Self-Rendering Admin UI</span>
+        </div>
+
+        <div class="hero-cta">
+          <a href="getting-started.html" class="btn btn-primary">Get Started →</a>
+          <a href="architecture.html" class="btn btn-outline">Explore Architecture</a>
+        </div>
+      </div>
+
+      <div class="hero-split-right">
+        <div class="code-window">
+          <div class="code-window-header">
+            <span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span>
+            <span class="code-window-title">This is all you write to get /api/v1/books</span>
+          </div>
+          <pre class="code-block"><code><span class="cm"># 1. Register the kind in the data layer</span>
+<span class="ck">ENTITY_KINDS</span>=book
+
+<span class="cm"># 2. Declare the schema + expose the route</span>
+<span class="ck">APP_KINDALIASPATHS_0_ALIAS</span>=books
+<span class="ck">APP_KINDALIASPATHS_0_NAME</span>=book
+<span class="ck">APP_KINDALIASPATHS_0_SCHEMA</span>={"required":["author"]}
+
+<span class="cm"># That's it. You now have:</span>
+<span class="cm">#   GET    /api/v1/books          (paginated, filterable)</span>
+<span class="cm">#   POST   /api/v1/books          (validated, auth-gated)</span>
+<span class="cm">#   GET    /api/v1/books/:id</span>
+<span class="cm">#   PATCH  /api/v1/books/:id      (field-masked per role)</span>
+<span class="cm">#   DELETE /api/v1/books/:id      (distributed-locked)</span>
+<span class="cm">#   GET    /api/v1/books/count</span>
+<span class="cm">#</span>
+<span class="cm">#   + live OpenAPI spec (personalized per caller)</span>
+<span class="cm">#   + AI agents can read &amp; act on the spec directly</span>
+<span class="cm">#   + self-rendering admin UI from the same spec</span>
+<span class="cm">#   + multi-tenant visibility, rate limiting, locking</span></code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── THE REAL COST SECTION (implicit "why not vibe-code it" answer) ──── -->
+<section class="section truth-section">
+  <div class="container">
+    <div class="section-label">The real cost of a "simple" backend</div>
+    <h2 class="section-title">Every SaaS backend hides the same iceberg</h2>
+    <p class="section-subtitle" style="max-width:700px">The endpoint is five minutes. The infrastructure around it takes weeks — and grows for years. These are the problems Tarcinapp has already solved.</p>
+
+    <div class="truth-grid">
+      <div class="truth-cell">
+        <div class="truth-cell-num">01</div>
+        <h4>Auth is never just auth</h4>
+        <p>JWT validation, multi-issuer support, role extraction, field-level permissions, and visibility scoping that can't be bypassed by a crafted query — all needs testing, maintenance, and security auditing.</p>
+      </div>
+      <div class="truth-cell">
+        <div class="truth-cell-num">02</div>
+        <h4>Multi-tenancy is a data model problem</h4>
+        <p>Ownership, visibility, viewer access, and group membership need to be baked into every record from day one. Retrofitting it onto an existing schema is painful. Tarcinapp's managed fields handle this automatically.</p>
+      </div>
+      <div class="truth-cell">
+        <div class="truth-cell-num">03</div>
+        <h4>Distributed systems bite quietly</h4>
+        <p>Concurrent writes to the same record produce silent data corruption without distributed locking. Rate limiting prevents abuse. Idempotency keys stop duplicate records on retries. None of this is trivial.</p>
+      </div>
+      <div class="truth-cell">
+        <div class="truth-cell-num">04</div>
+        <h4>Content lifecycle is always custom-built</h4>
+        <p>Pending → active → expired states, approval workflows, scheduled publishing, soft deletion with audit trail — every SaaS product ends up building this. Tarcinapp ships it as primitives on every record type.</p>
+      </div>
+      <div class="truth-cell">
+        <div class="truth-cell-num">05</div>
+        <h4>AI agents need a trustworthy API surface</h4>
+        <p>An AI coding agent is only as good as the API spec it reads. Tarcinapp generates a live, personalized OpenAPI spec per caller — shaped by real roles and policies. No stale docs, no spec drift. The agent sees exactly what the user is allowed to do.</p>
+      </div>
+      <div class="truth-cell">
+        <div class="truth-cell-num">06</div>
+        <h4>Your logic goes in one place</h4>
+        <p>The Orchestration Layer gives you a clean Pre/PostProcessor hook for every endpoint. Enrich data, enforce quotas, emit events — without touching the infrastructure. Domain logic and infrastructure never mix.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── VALUE PROPOSITIONS ───────────────────────────────────────────────── -->
+<section class="section section-alt">
+  <div class="container">
+    <div class="section-label">What you get immediately</div>
+    <h2 class="section-title">Infrastructure you don't have to build</h2>
+    <p class="section-subtitle">Everything in this list is live — not planned, not a roadmap item. It works today, from a schema definition — for your team, your users, and your AI agents.</p>
+
+    <div class="value-grid">
+      <div class="value-card">
+        <div class="value-icon">🔐</div>
+        <h3>Fine-Grained Authorization</h3>
+        <p>OPA-powered policies enforce who can do what at the <em>field level</em> — not just the route level. Role-based field masking means different users see different response shapes on the same endpoint, automatically.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-icon">🗂️</div>
+        <h3>Polymorphic Data Model</h3>
+        <p>Five generic record types model any business domain without migrations. The same deployment handles books, products, orders, and playlists — all differentiated by a single <code>_kind</code> field.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-icon">⚙️</div>
+        <h3>Configuration Over Code</h3>
+        <p>A new resource type is a handful of environment variables. JSON Schema validation, uniqueness rules, rate limits, and named field sets are all configuration — zero code to write or maintain.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-icon">🏢</div>
+        <h3>Multi-Tenancy Built In</h3>
+        <p>Visibility rules, ownership fields, and role hierarchies are part of the data model. Every record carries <code>_ownerUsers</code>, <code>_ownerGroups</code>, <code>_viewerUsers</code>, and <code>_visibility</code> — all enforced at query level.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-icon">⏱️</div>
+        <h3>Lifecycle Management</h3>
+        <p>Every record has a built-in state machine: <strong>pending → active → expired</strong>. Content moderation, scheduled publishing, and soft deletion with a full audit trail — all from two timestamp fields.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-icon">🤖</div>
+        <h3>AI &amp; Human-Ready API Surface</h3>
+        <p>The gateway generates a live, personalized OpenAPI spec per authenticated caller. AI coding agents, human developers, and the self-rendering admin UI all read the same spec — always accurate, role-scoped, and drift-free.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── ARCHITECTURE PREVIEW ─────────────────────────────────────────────── -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Architecture</div>
+    <h2 class="section-title">Six layers, clear separation</h2>
+    <p class="section-subtitle">Every concern has a dedicated layer. Business logic lives in exactly one place.</p>
+
+    <div class="arch-diagram">
+      <!-- Browser -->
+      <div class="arch-row arch-client">
+        <div class="arch-box arch-box-client">
+          <span class="arch-icon">🌐</span>
+          <span class="arch-label">Browser / API Client</span>
+          <span class="arch-sublabel">tarcinapp-base-gui · React 18</span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓ HTTPS</div>
+
+      <!-- Ingress -->
+      <div class="arch-row">
+        <div class="arch-box arch-box-planned">
+          <span class="arch-icon">🔀</span>
+          <span class="arch-label">Nginx Ingress</span>
+          <span class="arch-sublabel">tarcinapp-ingress-proxy <span class="badge-planned">planned</span></span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+
+      <!-- Gateway layer -->
+      <div class="arch-row arch-row-multi">
+        <div class="arch-box arch-box-gateway arch-box-wide">
+          <span class="arch-icon">🛡️</span>
+          <span class="arch-label">Gateway &amp; Security Layer</span>
+          <span class="arch-sublabel">entity-persistence-gateway · Spring Cloud Gateway / Java 21</span>
+          <div class="arch-chips">
+            <span class="chip">Auth (JWT)</span>
+            <span class="chip">OPA Authz</span>
+            <span class="chip">Field Masking</span>
+            <span class="chip">Domain Projection</span>
+            <span class="chip">Rate Limiting</span>
+            <span class="chip">OAS Generation</span>
+            <span class="chip">Distributed Lock</span>
+            <span class="chip">Caching</span>
+          </div>
+        </div>
+        <div class="arch-box arch-box-policy">
+          <span class="arch-icon">📋</span>
+          <span class="arch-label">OPA Policies</span>
+          <span class="arch-sublabel">gateway-policies · Rego</span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+
+      <!-- Orchestration -->
+      <div class="arch-row">
+        <div class="arch-box arch-box-orch">
+          <span class="arch-icon">⚡</span>
+          <span class="arch-label">Orchestration Layer</span>
+          <span class="arch-sublabel">universal-orchestrator · Quarkus / Apache Camel · <em>optional</em></span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+
+      <!-- Data layer -->
+      <div class="arch-row">
+        <div class="arch-box arch-box-data arch-box-wide">
+          <span class="arch-icon">💾</span>
+          <span class="arch-label">Data Layer</span>
+          <span class="arch-sublabel">entity-persistence-service · Node.js / LoopBack 4</span>
+          <div class="arch-chips">
+            <span class="chip">67 REST endpoints</span>
+            <span class="chip">5 record types</span>
+            <span class="chip">Hierarchies</span>
+            <span class="chip">Traversals</span>
+            <span class="chip">Lookups</span>
+          </div>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+
+      <!-- Infrastructure -->
+      <div class="arch-row arch-infra-row">
+        <div class="arch-box arch-box-infra-sm"><span class="arch-icon">🍃</span><span>MongoDB</span></div>
+        <div class="arch-box arch-box-infra-sm"><span class="arch-icon">⚡</span><span>Redis</span></div>
+        <div class="arch-box arch-box-infra-sm"><span class="arch-icon">🔑</span><span>Keycloak</span></div>
+        <div class="arch-box arch-box-infra-sm arch-box-planned-infra"><span class="arch-icon">🔍</span><span>Meilisearch<span class="badge-planned-sm">planned</span></span></div>
+        <div class="arch-box arch-box-infra-sm arch-box-planned-infra"><span class="arch-icon">📨</span><span>Kafka<span class="badge-planned-sm">planned</span></span></div>
+      </div>
+    </div>
+
+    <div class="arch-cta">
+      <a href="architecture.html" class="btn btn-outline">Full architecture →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── DATA MODEL PREVIEW ───────────────────────────────────────────────── -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Data Model</div>
+    <h2 class="section-title">Five types model any domain</h2>
+    <p class="section-subtitle">Every business entity maps to one of five generic record types, differentiated by the <code>_kind</code> field.</p>
+
+    <div class="record-types-grid">
+      <div class="record-card">
+        <div class="record-header record-entity">
+          <span class="record-type-name">Entity</span>
+          <code class="record-collection">/entities</code>
+        </div>
+        <p>Primary domain objects. Anything that is a "thing" in your domain.</p>
+        <div class="record-examples"><span class="ex-tag">book</span><span class="ex-tag">product</span><span class="ex-tag">article</span><span class="ex-tag">author</span></div>
+      </div>
+      <div class="record-card">
+        <div class="record-header record-list">
+          <span class="record-type-name">List</span>
+          <code class="record-collection">/lists</code>
+        </div>
+        <p>Groupings and collections of entities. Containers that organize your domain objects.</p>
+        <div class="record-examples"><span class="ex-tag">bookshelf</span><span class="ex-tag">playlist</span><span class="ex-tag">wishlist</span></div>
+      </div>
+      <div class="record-card">
+        <div class="record-header record-relation">
+          <span class="record-type-name">Relation</span>
+          <code class="record-collection">/relations</code>
+        </div>
+        <p>Many-to-many join between a list and an entity, with arbitrary metadata on the link.</p>
+        <div class="record-examples"><span class="ex-tag">book-in-shelf</span><span class="ex-tag">item-in-cart</span></div>
+      </div>
+      <div class="record-card">
+        <div class="record-header record-ereaction">
+          <span class="record-type-name">Entity Reaction</span>
+          <code class="record-collection">/entity-reactions</code>
+        </div>
+        <p>User interactions on entities. Supports threaded hierarchies for replies.</p>
+        <div class="record-examples"><span class="ex-tag">review</span><span class="ex-tag">rating</span><span class="ex-tag">bookmark</span></div>
+      </div>
+      <div class="record-card">
+        <div class="record-header record-lreaction">
+          <span class="record-type-name">List Reaction</span>
+          <code class="record-collection">/list-reactions</code>
+        </div>
+        <p>User interactions directed at a specific list.</p>
+        <div class="record-examples"><span class="ex-tag">shelf-like</span><span class="ex-tag">playlist-comment</span></div>
+      </div>
+    </div>
+    <div class="section-cta">
+      <a href="concepts.html#data-model" class="btn btn-outline">Full data model →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── LIFECYCLE PREVIEW ────────────────────────────────────────────────── -->
+<section class="section section-alt">
+  <div class="container">
+    <div class="two-col">
+      <div class="two-col-text">
+        <div class="section-label">Lifecycle</div>
+        <h2 class="section-title-sm">Every record has a state machine</h2>
+        <p>Records move through three states driven by two timestamp fields — no custom code required. Use it for content moderation, scheduled publishing, and soft deletion with a full audit trail.</p>
+        <ul class="feature-list">
+          <li><strong>Pending</strong> — awaiting approval, visible only to the owner and admin roles</li>
+          <li><strong>Active</strong> — live, publicly accessible per visibility settings</li>
+          <li><strong>Expired</strong> — soft-deleted, retained for audit, accessible only by admins</li>
+        </ul>
+        <a href="concepts.html#lifecycle" class="btn btn-outline btn-sm">Learn more →</a>
+      </div>
+      <div class="lifecycle-diagram">
+        <div class="lc-state lc-pending">
+          <span class="lc-dot lc-dot-pending"></span>
+          <div>
+            <div class="lc-name">PENDING</div>
+            <div class="lc-desc"><code>_validFromDateTime</code> null or future</div>
+          </div>
+        </div>
+        <div class="lc-arrow">↓ <code>_validFromDateTime</code> set to past</div>
+        <div class="lc-state lc-active">
+          <span class="lc-dot lc-dot-active"></span>
+          <div>
+            <div class="lc-name">ACTIVE</div>
+            <div class="lc-desc"><code>_validUntilDateTime</code> null or future</div>
+          </div>
+        </div>
+        <div class="lc-arrow">↓ <code>_validUntilDateTime</code> set to past</div>
+        <div class="lc-state lc-expired">
+          <span class="lc-dot lc-dot-expired"></span>
+          <div>
+            <div class="lc-name">EXPIRED</div>
+            <div class="lc-desc">Soft-deleted, audit retained</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── COMPONENTS STRIP ─────────────────────────────────────────────────── -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Components</div>
+    <h2 class="section-title">Six repositories, one coherent system</h2>
+    <div class="components-table">
+      <div class="comp-row comp-row-header">
+        <span>Component</span><span>Layer</span><span>Technology</span><span>Status</span>
+      </div>
+      <a href="components.html#eps" class="comp-row comp-row-item">
+        <span class="comp-name">entity-persistence-service</span>
+        <span class="comp-layer">Data</span>
+        <span class="comp-tech">Node.js · LoopBack 4 · MongoDB</span>
+        <span class="badge-impl">Implemented ✓</span>
+      </a>
+      <a href="components.html#gateway" class="comp-row comp-row-item">
+        <span class="comp-name">entity-persistence-gateway</span>
+        <span class="comp-layer">Gateway &amp; Security</span>
+        <span class="comp-tech">Java 21 · Spring Cloud Gateway · Redis</span>
+        <span class="badge-impl">Implemented ✓</span>
+      </a>
+      <a href="components.html#policies" class="comp-row comp-row-item">
+        <span class="comp-name">gateway-policies</span>
+        <span class="comp-layer">Authorization</span>
+        <span class="comp-tech">OPA · Rego</span>
+        <span class="badge-impl">Implemented ✓</span>
+      </a>
+      <a href="components.html#orchestrator" class="comp-row comp-row-item">
+        <span class="comp-name">universal-orchestrator</span>
+        <span class="comp-layer">Business Logic</span>
+        <span class="comp-tech">Java 17 · Quarkus · Apache Camel</span>
+        <span class="badge-partial">Partial ◑</span>
+      </a>
+      <a href="components.html#gui" class="comp-row comp-row-item">
+        <span class="comp-name">tarcinapp-base-gui</span>
+        <span class="comp-layer">Client</span>
+        <span class="comp-tech">React 18 · Vite · Tailwind CSS</span>
+        <span class="badge-partial">Partial ◑</span>
+      </a>
+    </div>
+    <div class="section-cta">
+      <a href="components.html" class="btn btn-outline">All components →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── DEPLOY TEASER ────────────────────────────────────────────────────── -->
+<section class="section section-alt">
+  <div class="container">
+    <div class="section-label">Deployment</div>
+    <h2 class="section-title">Run it anywhere</h2>
+    <p class="section-subtitle" style="max-width:620px">The full stack is designed for containers from the start. Pre-built recipes are coming — so spinning up a complete Tarcinapp environment is a single command.</p>
+
+    <div class="deploy-grid">
+      <div class="deploy-card deploy-card-planned">
+        <span class="deploy-badge-soon">Coming soon</span>
+        <div class="deploy-card-icon">🐳</div>
+        <h3>Docker Compose</h3>
+        <p>A single <code>docker-compose.yml</code> that brings up the full stack — MongoDB, Redis, OPA, EPS, Gateway, GUI — with health checks, correct startup ordering, and pre-configured networking. One command to a working environment.</p>
+      </div>
+      <div class="deploy-card deploy-card-planned">
+        <span class="deploy-badge-soon">Coming soon</span>
+        <div class="deploy-card-icon">☸️</div>
+        <h3>Kubernetes</h3>
+        <p>Helm charts and reference Deployments with ConfigMaps, Secrets, Services, Ingress, resource limits, and health probes. Production-ready Kubernetes recipes for each component, sized for real workloads.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── GET STARTED ──────────────────────────────────────────────────────── -->
+<section class="section section-cta-band">
+  <div class="container">
+    <h2>Start with a schema today.</h2>
+    <p>The infrastructure is already built. Your domain is three environment variables away.</p>
+    <div class="cta-band-actions">
+      <a href="getting-started.html" class="btn btn-primary">Getting Started →</a>
+      <a href="examples.html" class="btn btn-ghost">See the Books Example</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FOOTER ───────────────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark">T</span>
+      <span class="footer-name">Tarcinapp Suite</span>
+      <span class="footer-tagline">Backend-as-configuration for SaaS builders</span>
+    </div>
+    <nav class="footer-nav">
+      <div class="footer-col">
+        <span class="footer-col-title">Documentation</span>
+        <a href="architecture.html">Architecture</a>
+        <a href="concepts.html">Concepts</a>
+        <a href="components.html">Components</a>
+        <a href="configuration.html">Configuration</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">Resources</span>
+        <a href="getting-started.html">Getting Started</a>
+        <a href="examples.html">Examples</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">Project</span>
+        <a href="https://github.com/tarcinapp/tarcinapp-suite" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/tarcinapp/tarcinapp-suite/issues" target="_blank" rel="noopener">Issues</a>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">
+    <span>Tarcinapp Suite is actively developed. Docs evolve with the suite.</span>
+  </div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

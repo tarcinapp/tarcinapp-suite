@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Concepts — Tarcinapp Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-mark">T</span>
+      <span class="logo-text">arcinapp<span class="logo-suite"> Suite</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="concepts.html">Concepts</a></li>
+      <li><a href="components.html">Components</a></li>
+      <li class="has-dropdown">
+        <a href="resources.html">Resources ▾</a>
+        <ul class="dropdown">
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="examples.html">Examples</a></li>
+          <li><a href="configuration.html">Configuration Reference</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="https://github.com/tarcinapp" class="btn-github" target="_blank" rel="noopener">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <span class="doc-sidebar-title">Data</span>
+    <a href="#data-model">The Data Model</a>
+    <a href="#record-types">Five Record Types</a>
+    <a href="#managed-fields">Managed Fields</a>
+    <a href="#kind">The _kind Discriminator</a>
+    <a href="#hierarchy">Hierarchies</a>
+    <a href="#tapp-uri">tapp:// URI Scheme</a>
+    <a href="#lifecycle">Record Lifecycle</a>
+    <a href="#visibility">Visibility</a>
+    <span class="doc-sidebar-title">Security</span>
+    <a href="#security-flow">Security Flow</a>
+    <a href="#roles">Role Hierarchy</a>
+    <a href="#opa-passes">OPA Two-Pass Check</a>
+    <a href="#field-masking">Field Masking</a>
+    <a href="#locking">Distributed Locking</a>
+    <span class="doc-sidebar-title">Domain</span>
+    <a href="#domain-projection">Domain Projection</a>
+    <a href="#kind-alias">Kind Aliases</a>
+    <a href="#oas-generation">OAS Generation</a>
+    <span class="doc-sidebar-title">Logic</span>
+    <a href="#orchestration">Orchestration Layer</a>
+    <a href="#when-to-use">Decision Guide</a>
+    <a href="#query-language">Query Language</a>
+  </aside>
+
+  <div class="doc-main">
+    <div class="page-header">
+      <div class="page-breadcrumb"><a href="index.html">Home</a> / Concepts</div>
+          <h1>Core Concepts</h1>
+          <p>The foundational ideas that make Tarcinapp work — data model, security, domain projection, and the orchestration layer.</p>
+    </div>
+
+  <main class="doc-content prose">
+
+    <!-- ── DATA MODEL ─────────────────────────────────────────────────────── -->
+    <h2 id="data-model">The Data Model</h2>
+    <p>Tarcinapp uses a <strong>polymorphic data model</strong>: all business data maps onto five generic record types stored in MongoDB. A single deployment can store books, shelves, reviews, and user follows — all using the same five types, differentiated by the <code>_kind</code> field.</p>
+    <p>This design makes the system radically reusable: adding a new resource type never requires schema migrations, new collections, or new service code. It is purely a configuration change.</p>
+
+    <h3 id="record-types">Five Record Types</h3>
+
+    <table>
+      <thead><tr><th>Type</th><th>Collection</th><th>Purpose</th><th>Typical <code>_kind</code> values</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Entity</strong></td><td><code>entities</code></td><td>Primary domain objects — anything that is a "thing"</td><td><code>book</code>, <code>product</code>, <code>author</code></td></tr>
+        <tr><td><strong>List</strong></td><td><code>lists</code></td><td>Groupings / collections of entities</td><td><code>bookshelf</code>, <code>playlist</code>, <code>wishlist</code></td></tr>
+        <tr><td><strong>Relation</strong></td><td><code>list-entity-relations</code></td><td>Many-to-many join between a list and an entity, with metadata on the link itself</td><td><code>book-in-shelf</code>, <code>item-in-cart</code></td></tr>
+        <tr><td><strong>EntityReaction</strong></td><td><code>entity-reactions</code></td><td>User interaction on a specific entity; supports threaded hierarchy</td><td><code>review</code>, <code>rating</code>, <code>bookmark</code></td></tr>
+        <tr><td><strong>ListReaction</strong></td><td><code>list-reactions</code></td><td>User interaction on a specific list</td><td><code>playlist-like</code>, <code>shelf-comment</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="managed-fields">Managed Fields</h3>
+    <p>Every record across all five types is automatically decorated with <strong>managed fields</strong> — underscore-prefixed system attributes injected, enforced, or computed by the gateway and EPS. Callers never need to supply these; they cannot be forged.</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:680px;font-family:'JetBrains Mono',monospace">
+        <rect x="20" y="10" width="640" height="360" rx="12" fill="none" stroke="#E5E7EB" stroke-width="1.5"/>
+        <text x="40" y="38" font-weight="700" font-size="13" fill="#374151" font-family="Inter,sans-serif">Managed Field Categories</text>
+
+        <!-- Cat 1 -->
+        <rect x="40" y="52" width="280" height="145" rx="8" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
+        <text x="56" y="72" font-size="11" font-weight="700" fill="#1D4ED8" font-family="Inter,sans-serif">① Strictly System-Managed</text>
+        <text x="56" y="90" font-size="10" fill="#3B82F6">_version        optimistic lock counter</text>
+        <text x="56" y="106" font-size="10" fill="#3B82F6">_idempotencyKey  dedup hash (hidden)</text>
+        <text x="56" y="122" font-size="10" fill="#3B82F6">_parentsCount   cached hierarchy count</text>
+        <text x="56" y="138" font-size="10" fill="#3B82F6">_ownerUsersCount  cached access count</text>
+        <text x="56" y="154" font-size="10" fill="#3B82F6">_viewerUsersCount cached view count</text>
+        <text x="56" y="170" font-size="10" fill="#3B82F6">_recordType     virtual, never persisted</text>
+        <text x="56" y="188" font-size="10" fill="#93C5FD">Set by application only. User input ignored.</text>
+
+        <!-- Cat 2 -->
+        <rect x="360" y="52" width="280" height="145" rx="8" fill="#F0FDF4" stroke="#BBF7D0" stroke-width="1"/>
+        <text x="376" y="72" font-size="11" font-weight="700" fill="#15803D" font-family="Inter,sans-serif">② Gateway-Managed</text>
+        <text x="376" y="90" font-size="10" fill="#16A34A">_createdBy      JWT sub at creation</text>
+        <text x="376" y="106" font-size="10" fill="#16A34A">_createdDateTime  ISO 8601 timestamp</text>
+        <text x="376" y="122" font-size="10" fill="#16A34A">_lastUpdatedBy   JWT sub on update</text>
+        <text x="376" y="138" font-size="10" fill="#16A34A">_lastUpdatedDateTime</text>
+        <text x="376" y="154" font-size="10" fill="#16A34A">_validFromDateTime  approval gate</text>
+        <text x="376" y="170" font-size="10" fill="#16A34A">_ownerUsers     from JWT sub</text>
+        <text x="376" y="188" font-size="10" fill="#86EFAC">Injected from JWT. Admin-modifiable via OPA.</text>
+
+        <!-- Cat 3 -->
+        <rect x="40" y="220" width="280" height="120" rx="8" fill="#FFFBEB" stroke="#FEF08A" stroke-width="1"/>
+        <text x="56" y="240" font-size="11" font-weight="700" fill="#92400E" font-family="Inter,sans-serif">③ Auto-Filled if Empty</text>
+        <text x="56" y="258" font-size="10" fill="#D97706">_kind        injected by gateway kind alias</text>
+        <text x="56" y="274" font-size="10" fill="#D97706">_visibility  public | protected | private</text>
+        <text x="56" y="290" font-size="10" fill="#D97706">_slug        URL-safe from _name</text>
+        <text x="56" y="306" font-size="10" fill="#D97706">_validFromDateTime  if auto-approve on</text>
+        <text x="56" y="328" font-size="10" fill="#FDE68A">Applied when caller omits them.</text>
+
+        <!-- Cat 4 -->
+        <rect x="360" y="220" width="280" height="120" rx="8" fill="#FDF4FF" stroke="#E9D5FF" stroke-width="1"/>
+        <text x="376" y="240" font-size="11" font-weight="700" fill="#7E22CE" font-family="Inter,sans-serif">④ User-Settable</text>
+        <text x="376" y="258" font-size="10" fill="#9333EA">_id          UUID (server-generated, immutable)</text>
+        <text x="376" y="274" font-size="10" fill="#9333EA">_name        display name</text>
+        <text x="376" y="290" font-size="10" fill="#9333EA">_validUntilDateTime  soft-delete / expiry</text>
+        <text x="376" y="306" font-size="10" fill="#9333EA">_viewerUsers / _viewerGroups  read-only access</text>
+        <text x="376" y="322" font-size="10" fill="#9333EA">_parents     tapp:// URIs for hierarchy</text>
+        <text x="376" y="338" font-size="10" fill="#DDD6FE">Subject to field-level OPA policy.</text>
+      </svg>
+    </div>
+
+    <h3 id="kind">The <code>_kind</code> Discriminator</h3>
+    <p><code>_kind</code> is the field that differentiates records within the same MongoDB collection. It is:</p>
+    <ul>
+      <li><strong>Injected by the gateway</strong> for Kind Alias routes (calling <code>POST /books</code> automatically sets <code>"_kind":"book"</code>)</li>
+      <li><strong>Immutable after creation</strong> — changing it returns <code>422 IMMUTABLE-ENTITY-KIND</code></li>
+      <li><strong>Used by the gateway</strong> to apply kind-specific JSON Schema validation, rate limits, and saved queries</li>
+      <li><strong>Used by EPS</strong> to enforce allowed kinds and apply per-kind record limits</li>
+    </ul>
+
+    <h3 id="hierarchy">Hierarchies</h3>
+    <p>Entities, Lists, EntityReactions, and ListReactions all support parent-child trees via the <code>_parents</code> field. Relations do not support hierarchy.</p>
+    <p>Setting <code>_parents</code> on a child record automatically updates the parent's <code>_children</code> array. When a child is deleted, EPS removes it from the parent's <code>_children</code> automatically.</p>
+    <pre><code>POST /entities
+{
+  "_name": "Chapter 1",
+  "_kind": "chapter",
+  "_parents": ["tapp://localhost/entity/book-uuid-here"]
+}
+
+GET /entities/{bookId}/children      ← direct children
+GET /entities/{chapterId}/parents    ← direct parents
+GET /entities?filter[where][_parentsCount]=0  ← root items only</code></pre>
+
+    <h3 id="tapp-uri">The <code>tapp://</code> URI Scheme</h3>
+    <p>The <code>_parents</code> field uses <code>tapp://</code> URIs to reference parent records. The format is:</p>
+    <pre><code>tapp://localhost/{recordType}/{uuid}
+
+Examples:
+  tapp://localhost/entity/a1b2c3d4-...
+  tapp://localhost/list/e5f6g7h8-...
+  tapp://localhost/entity-reaction/d9e0f1a2-...</code></pre>
+    <div class="callout">
+      <p><strong>Note:</strong> <code>_listId</code> and <code>_entityId</code> on Relation and Reaction records are plain UUIDs, not <code>tapp://</code> URIs. Only <code>_parents</code> and arbitrary custom reference fields use the <code>tapp://</code> scheme.</p>
+    </div>
+    <p>Any field (not just <code>_parents</code>) can hold a <code>tapp://</code> URI. The <code>filter[lookup]</code> query parameter resolves these references at query time, embedding the referenced record inline. Lookup resolution is subject to the same authorization rules as direct access — the caller must have permission to see the referenced record.</p>
+
+    <!-- ── LIFECYCLE ──────────────────────────────────────────────────────── -->
+    <h2 id="lifecycle">Record Lifecycle</h2>
+    <p>Every record has a <strong>lifecycle state</strong> derived from two timestamp fields. No explicit "status" field exists — state is always computed from the timestamps:</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:600px;font-family:Inter,sans-serif">
+        <!-- PENDING -->
+        <rect x="20" y="20" width="170" height="80" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+        <circle cx="105" cy="44" r="8" fill="#F59E0B"/>
+        <text x="105" y="65" text-anchor="middle" font-weight="700" font-size="13" fill="#92400E">PENDING</text>
+        <text x="105" y="82" text-anchor="middle" font-size="10" fill="#D97706">_validFromDateTime</text>
+        <text x="105" y="95" text-anchor="middle" font-size="10" fill="#D97706">null or in future</text>
+        <!-- arrow PENDING→ACTIVE -->
+        <line x1="190" y1="60" x2="215" y2="60" stroke="#6B7280" stroke-width="1.5" marker-end="url(#a3)"/>
+        <text x="202" y="53" text-anchor="middle" font-size="9" fill="#9CA3AF">set to past</text>
+        <!-- ACTIVE -->
+        <rect x="215" y="20" width="170" height="80" rx="10" fill="#F0FDF4" stroke="#22C55E" stroke-width="2"/>
+        <circle cx="300" cy="44" r="8" fill="#22C55E"/>
+        <text x="300" y="65" text-anchor="middle" font-weight="700" font-size="13" fill="#15803D">ACTIVE</text>
+        <text x="300" y="82" text-anchor="middle" font-size="10" fill="#16A34A">_validUntilDateTime</text>
+        <text x="300" y="95" text-anchor="middle" font-size="10" fill="#16A34A">null or in future</text>
+        <!-- arrow ACTIVE→EXPIRED -->
+        <line x1="385" y1="60" x2="410" y2="60" stroke="#6B7280" stroke-width="1.5" marker-end="url(#a3)"/>
+        <text x="397" y="53" text-anchor="middle" font-size="9" fill="#9CA3AF">set to past</text>
+        <!-- EXPIRED -->
+        <rect x="410" y="20" width="170" height="80" rx="10" fill="#FFF1F2" stroke="#F43F5E" stroke-width="2"/>
+        <circle cx="495" cy="44" r="8" fill="#F43F5E"/>
+        <text x="495" y="65" text-anchor="middle" font-weight="700" font-size="13" fill="#BE123C">EXPIRED</text>
+        <text x="495" y="82" text-anchor="middle" font-size="10" fill="#E11D48">Soft-deleted</text>
+        <text x="495" y="95" text-anchor="middle" font-size="10" fill="#E11D48">audit retained</text>
+        <!-- Access rules -->
+        <text x="105" y="135" text-anchor="middle" font-size="10" fill="#6B7280">Owner + admin/editor only</text>
+        <text x="300" y="135" text-anchor="middle" font-size="10" fill="#6B7280">Standard visibility rules</text>
+        <text x="495" y="135" text-anchor="middle" font-size="10" fill="#6B7280">Admin/editor only</text>
+        <!-- Filter sets -->
+        <text x="105" y="153" text-anchor="middle" font-size="9" font-family="'JetBrains Mono',monospace" fill="#D97706">sets[pendings]</text>
+        <text x="300" y="153" text-anchor="middle" font-size="9" font-family="'JetBrains Mono',monospace" fill="#16A34A">sets[actives]</text>
+        <text x="495" y="153" text-anchor="middle" font-size="9" font-family="'JetBrains Mono',monospace" fill="#E11D48">sets[expireds]</text>
+        <defs>
+          <marker id="a3" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#6B7280"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <table>
+      <thead><tr><th>State</th><th>Condition</th><th>Who can see it</th><th>Query filter</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Pending</strong></td><td><code>_validFromDateTime</code> null or future</td><td>Owner + admin/editor</td><td><code>sets[pendings]</code></td></tr>
+        <tr><td><strong>Active</strong></td><td><code>_validFromDateTime</code> past AND <code>_validUntilDateTime</code> null or future</td><td>Per visibility rules</td><td><code>sets[actives]</code></td></tr>
+        <tr><td><strong>Expired</strong></td><td><code>_validUntilDateTime</code> past</td><td>Admin/editor owners only</td><td><code>sets[expireds]</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="visibility">Visibility</h3>
+    <p>Every record has a <code>_visibility</code> field with three levels:</p>
+    <table>
+      <thead><tr><th>Value</th><th>Who can access</th></tr></thead>
+      <tbody>
+        <tr><td><code>public</code></td><td>All authenticated users — <strong>but only when the record is active</strong></td></tr>
+        <tr><td><code>protected</code></td><td>Direct owners, <code>_ownerGroups</code> members, <code>_viewerUsers</code>, <code>_viewerGroups</code>, and appropriate roles</td></tr>
+        <tr><td><code>private</code></td><td>Only <code>_ownerUsers</code>, <code>_viewerUsers</code>, and admin/editor. Group ownership is disabled.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout callout-warn">
+      <p><strong>Common Gotcha:</strong> A record with <code>_visibility: public</code> that is still <em>pending</em> is NOT visible to the public. Visibility only takes effect when a record is active. A pending record is always restricted to its owner and admin roles.</p>
+    </div>
+
+    <!-- ── SECURITY ───────────────────────────────────────────────────────── -->
+    <h2 id="security-flow">Security Flow</h2>
+    <p>Every request goes through a deterministic security pipeline before any data is touched:</p>
+    <ol>
+      <li><strong>JWT validation</strong> — signature, issuer, expiry. Rejects with 401 if invalid.</li>
+      <li><strong>OPA Pass 1: Operation authorization</strong> — may this role perform this HTTP method on this resource? Returns allow/deny + sets injection (visibility scoping query constraints).</li>
+      <li><strong>OPA Pass 2: Field authorization</strong> — which fields may this role read/write? Returns allowed/forbidden field lists.</li>
+      <li><strong>Field masking on request</strong> — strips forbidden fields from request body before forwarding to EPS.</li>
+      <li><strong>Managed field injection</strong> — adds <code>_createdBy</code>, <code>_ownerUsers</code>, etc. from JWT claims.</li>
+      <li><strong>Field masking on response</strong> — strips forbidden fields from the EPS response before returning to caller.</li>
+    </ol>
+
+    <h3 id="roles">Role Hierarchy</h3>
+    <table>
+      <thead><tr><th>Role</th><th>Capabilities</th></tr></thead>
+      <tbody>
+        <tr><td><code>admin</code></td><td>Full access. Can see and modify all records regardless of ownership or visibility. Can set any managed field.</td></tr>
+        <tr><td><code>editor</code></td><td>Broad read/write. Can approve content (set <code>_validFromDateTime</code>). Cannot modify other users' ownership fields.</td></tr>
+        <tr><td><code>member</code></td><td>Standard user. Can create, read own records, update own records. Cannot approve content or see others' private records.</td></tr>
+        <tr><td><em>(none / anonymous)</em></td><td>Public read-only access to active + public records. No write access.</td></tr>
+      </tbody>
+    </table>
+    <p>Role names follow the convention <code>tarcinapp.records.entity.admin</code>, <code>tarcinapp.records.entity.member</code>, etc. Field-level roles follow <code>tarcinapp.fields.entities._validFromDateTime.create</code>.</p>
+
+    <h3 id="opa-passes">OPA Two-Pass Authorization</h3>
+    <p>Every authorized request results in two OPA calls:</p>
+    <ul>
+      <li><strong>Pass 1 — Operation Check:</strong> Input is the HTTP method, path, and JWT claims. Output is <code>allow: true/false</code> plus <code>setFilters</code> — additional query constraints the gateway must inject (e.g., <code>sets[actives]=true&amp;sets[owners][userIds]=user-id</code>). This ensures callers can never query records they shouldn't see, even if they craft clever filter queries.</li>
+      <li><strong>Pass 2 — Field Check:</strong> Input is the allowed operation result. Output is lists of allowed/forbidden fields for both read and write. The gateway uses this to strip fields from both the request body (before forwarding) and the response body (before returning).</li>
+    </ul>
+
+    <h3 id="field-masking">Field Masking</h3>
+    <p>Field masking is <em>structural</em> — forbidden fields are physically absent from the JSON, not replaced with null or a placeholder. A caller who cannot see <code>_ownerUsers</code> receives a response body that literally does not contain that key. The GUI uses this: if a field is absent from the OAS spec, no column or form field is rendered for it — zero client-side access control logic needed.</p>
+
+    <h3 id="locking">Distributed Locking</h3>
+    <p>For all write operations (POST, PUT, PATCH, DELETE on single records), the gateway acquires a Redis-backed distributed lock before forwarding to EPS. This prevents concurrent writes from producing lost updates or corrupted records. The lock key is derived from the record's ID. Locks are released after the operation completes, including on error. If a lock cannot be acquired within the configured timeout, the gateway returns <code>409 Conflict</code>.</p>
+
+    <!-- ── DOMAIN PROJECTION ──────────────────────────────────────────────── -->
+    <h2 id="domain-projection">Domain Projection</h2>
+    <p>Domain Projection is how the gateway turns the generic <code>/entities</code> API into a domain-specific <code>/books</code> API — without changing EPS at all. It is purely a gateway-layer transformation.</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:680px;font-family:'JetBrains Mono',monospace">
+        <defs>
+          <marker id="a4" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#9333EA"/>
+          </marker>
+        </defs>
+        <!-- Client -->
+        <rect x="20" y="70" width="140" height="80" rx="8" fill="#EEF2FF" stroke="#818CF8" stroke-width="1.5"/>
+        <text x="90" y="103" text-anchor="middle" font-weight="700" font-size="12" fill="#4338CA">Client</text>
+        <text x="90" y="121" text-anchor="middle" font-size="10" fill="#6366F1">GET /api/v1/books</text>
+        <text x="90" y="137" text-anchor="middle" font-size="10" fill="#6366F1">POST /api/v1/books</text>
+        <!-- Arrow -->
+        <line x1="160" y1="110" x2="210" y2="110" stroke="#9333EA" stroke-width="1.5" marker-end="url(#a4)"/>
+        <!-- Gateway box -->
+        <rect x="210" y="20" width="240" height="180" rx="8" fill="#FDF4FF" stroke="#A855F7" stroke-width="1.5"/>
+        <text x="330" y="44" text-anchor="middle" font-weight="700" font-size="12" fill="#7E22CE">Gateway Transform</text>
+        <text x="330" y="68" text-anchor="middle" font-size="10" fill="#9333EA">① Path Rewrite: /books → /entities</text>
+        <text x="330" y="88" text-anchor="middle" font-size="10" fill="#9333EA">② _kind Injection: "book"</text>
+        <text x="330" y="108" text-anchor="middle" font-size="10" fill="#9333EA">③ Schema Validation (JSON Schema)</text>
+        <text x="330" y="128" text-anchor="middle" font-size="10" fill="#9333EA">④ Sets Injection: visibility scoping</text>
+        <text x="330" y="148" text-anchor="middle" font-size="10" fill="#9333EA">⑤ OAS Pruning (domain-only mode)</text>
+        <text x="330" y="180" text-anchor="middle" font-size="9" fill="#C4B5FD">Runs on every request, no state</text>
+        <!-- Arrow -->
+        <line x1="450" y1="110" x2="500" y2="110" stroke="#9333EA" stroke-width="1.5" marker-end="url(#a4)"/>
+        <!-- EPS -->
+        <rect x="500" y="70" width="160" height="80" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+        <text x="580" y="103" text-anchor="middle" font-weight="700" font-size="12" fill="#1D4ED8">EPS</text>
+        <text x="580" y="121" text-anchor="middle" font-size="10" fill="#3B82F6">GET /entities</text>
+        <text x="580" y="137" text-anchor="middle" font-size="10" fill="#3B82F6">?filter[where][_kind]=book</text>
+      </svg>
+    </div>
+
+    <h3 id="kind-alias">Kind Aliases</h3>
+    <p>Kind Aliases are the configuration unit of Domain Projection. Each alias maps a URL path segment to a <code>_kind</code> value and optionally carries schema, rate limits, field sets, and saved queries:</p>
+    <pre><code># Expose /api/v1/books backed by entities with _kind=book
+APP_KINDALIASPATHS_0_ALIAS=books
+APP_KINDALIASPATHS_0_NAME=book
+APP_KINDALIASPATHS_0_SCHEMA={"type":"object","required":["author"],"properties":{"author":{"type":"string"}}}
+
+# Expose /api/v1/shelves backed by lists with _kind=shelf
+APP_KINDALIASPATHS_1_ALIAS=shelves
+APP_KINDALIASPATHS_1_NAME=shelf
+
+# Expose /api/v1/reviews backed by entity-reactions with _kind=review
+APP_KINDALIASPATHS_2_ALIAS=reviews
+APP_KINDALIASPATHS_2_NAME=review</code></pre>
+
+    <h3 id="oas-generation">Dynamic OpenAPI Generation</h3>
+    <p>The gateway generates a <strong>personalized</strong> OpenAPI spec per authenticated caller:</p>
+    <ul>
+      <li>Fields the caller may not read are absent from GET response schemas → the GUI does not render them as columns</li>
+      <li>Fields the caller may not write are absent from POST/PATCH schemas → the GUI does not include them in forms</li>
+      <li>Routes the caller may not access are absent entirely → the GUI renders no Create/Edit/Delete button for those operations</li>
+    </ul>
+    <p>The GUI implements zero client-side access control logic. It renders exactly what the spec describes. Changing a user's role or updating an OPA policy is immediately reflected in the UI on the next spec fetch.</p>
+
+    <!-- ── ORCHESTRATION ───────────────────────────────────────────────────── -->
+    <h2 id="orchestration">Orchestration Layer</h2>
+    <p>The <code>universal-orchestrator</code> is an optional, thin middleware that sits between the Gateway and EPS. It exposes <strong>PreProcessor</strong> and <strong>PostProcessor</strong> hooks for every endpoint, giving you a well-defined integration point for custom business logic.</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 680 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:680px;font-family:Inter,sans-serif">
+        <defs>
+          <marker id="a5" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#6B7280"/>
+          </marker>
+        </defs>
+        <rect x="10" y="30" width="100" height="56" rx="8" fill="#FDF4FF" stroke="#A855F7" stroke-width="1.5"/>
+        <text x="60" y="57" text-anchor="middle" font-weight="700" font-size="11" fill="#7E22CE">Gateway</text>
+        <text x="60" y="73" text-anchor="middle" font-size="9" fill="#A855F7">Auth + Authz</text>
+
+        <line x1="110" y1="58" x2="150" y2="58" stroke="#6B7280" stroke-width="1.5" marker-end="url(#a5)"/>
+
+        <rect x="150" y="10" width="140" height="40" rx="6" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1"/>
+        <text x="220" y="27" text-anchor="middle" font-weight="600" font-size="10" fill="#92400E">PreProcessor</text>
+        <text x="220" y="42" text-anchor="middle" font-size="9" fill="#D97706">enrich · validate · reject</text>
+
+        <line x1="220" y1="50" x2="220" y2="70" stroke="#6B7280" stroke-width="1.5" marker-end="url(#a5)"/>
+        <line x1="220" y1="70" x2="300" y2="70" stroke="#6B7280" stroke-width="1.5" marker-end="url(#a5)"/>
+
+        <rect x="300" y="30" width="100" height="56" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+        <text x="350" y="57" text-anchor="middle" font-weight="700" font-size="11" fill="#1D4ED8">EPS</text>
+        <text x="350" y="73" text-anchor="middle" font-size="9" fill="#3B82F6">MongoDB ops</text>
+
+        <line x1="400" y1="70" x2="460" y2="70" stroke="#6B7280" stroke-width="1.5" marker-end="url(#a5)"/>
+        <line x1="460" y1="70" x2="460" y2="50" stroke="#6B7280" stroke-width="1.5" marker-end="url(#a5)"/>
+
+        <rect x="390" y="10" width="140" height="40" rx="6" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1"/>
+        <text x="460" y="27" text-anchor="middle" font-weight="600" font-size="10" fill="#92400E">PostProcessor</text>
+        <text x="460" y="42" text-anchor="middle" font-size="9" fill="#D97706">enrich · notify · transform</text>
+
+        <line x1="530" y1="30" x2="555" y2="30" stroke="#6B7280" stroke-width="1" stroke-dasharray="4,3"/>
+        <line x1="530" y1="58" x2="555" y2="58" stroke="#6B7280" stroke-width="1.5" marker-end="url(#a5)"/>
+
+        <rect x="555" y="30" width="115" height="56" rx="8" fill="#FDF4FF" stroke="#A855F7" stroke-width="1.5"/>
+        <text x="612" y="57" text-anchor="middle" font-weight="700" font-size="11" fill="#7E22CE">Gateway</text>
+        <text x="612" y="73" text-anchor="middle" font-size="9" fill="#A855F7">Field masking</text>
+      </svg>
+    </div>
+
+    <h3 id="when-to-use">Decision Guide: Where does logic go?</h3>
+    <table>
+      <thead><tr><th>Concern</th><th>Right place</th></tr></thead>
+      <tbody>
+        <tr><td>Who can call this endpoint?</td><td>OPA policy</td></tr>
+        <tr><td>Which fields can this role see/write?</td><td>OPA policy</td></tr>
+        <tr><td>Request body schema / required fields</td><td>Gateway kind alias JSON Schema</td></tr>
+        <tr><td>Enrich request body from external service</td><td>Orchestrator PreProcessor</td></tr>
+        <tr><td>Cross-record quota enforcement</td><td>Orchestrator PreProcessor</td></tr>
+        <tr><td>Async side effects (send email, emit event)</td><td>Orchestrator PostProcessor</td></tr>
+        <tr><td>Response aggregation (multiple EPS calls)</td><td>Orchestrator PostProcessor</td></tr>
+        <tr><td>Rate limiting per kind</td><td>Gateway kind alias config</td></tr>
+        <tr><td>Per-kind record limits per user</td><td>EPS config (<code>ENTITY_RECORD_LIMITS</code>)</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── QUERY LANGUAGE ─────────────────────────────────────────────────── -->
+    <h2 id="query-language">Query Language</h2>
+    <p>EPS uses a LoopBack 4-style filter query language. The gateway adds simplified aliases for common parameters.</p>
+    <table>
+      <thead><tr><th>Feature</th><th>Native param</th><th>Gateway alias</th></tr></thead>
+      <tbody>
+        <tr><td>Filtering</td><td><code>filter[where][field][op]=value</code></td><td><code>filter[where]</code> preserved as-is</td></tr>
+        <tr><td>Pagination</td><td><code>filter[limit]=N&filter[skip]=M</code></td><td><code>limit=N&skip=M</code></td></tr>
+        <tr><td>Search by name</td><td><code>filter[where][_name][regexp]=.*term.*</code></td><td><code>s=term</code></td></tr>
+        <tr><td>Named query</td><td>—</td><td><code>q=queryName</code></td></tr>
+        <tr><td>Field set</td><td><code>filter[fields][f]=true</code></td><td><code>fieldset=setName</code></td></tr>
+        <tr><td>Status filter</td><td><code>filter[where][_validFromDateTime][lt]=now</code></td><td><code>sets[actives]=true</code></td></tr>
+        <tr><td>Visibility filter</td><td><code>filter[where][_visibility]=public</code></td><td><code>sets[publics]=true</code></td></tr>
+        <tr><td>Sort</td><td><code>filter[order]=field dir</code></td><td>same</td></tr>
+        <tr><td>Include related</td><td><code>filter[include][0][relation]=name</code></td><td>same</td></tr>
+        <tr><td>Lookup resolution</td><td><code>filter[lookup][0][prop]=fieldName</code></td><td>same</td></tr>
+        <tr><td>Traversal scope</td><td><code>filter[through][where][field]=value</code></td><td>same</td></tr>
+      </tbody>
+    </table>
+    <p>Logical operators supported in <code>filter[where]</code>: <code>and</code>, <code>or</code>, <code>eq</code>, <code>neq</code>, <code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code>, <code>inq</code>, <code>nin</code>, <code>regexp</code>, <code>between</code>, <code>like</code>, <code>nlike</code>.</p>
+
+  </main>
+  </div><!-- /.doc-main -->
+</div><!-- /.doc-layout -->
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark">T</span>
+      <span class="footer-name">Tarcinapp Suite</span>
+      <span class="footer-tagline">Backend-as-configuration for SaaS builders</span>
+    </div>
+    <nav class="footer-nav">
+      <div class="footer-col">
+        <span class="footer-col-title">Documentation</span>
+        <a href="architecture.html">Architecture</a>
+        <a href="concepts.html">Concepts</a>
+        <a href="components.html">Components</a>
+        <a href="configuration.html">Configuration</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">Resources</span>
+        <a href="getting-started.html">Getting Started</a>
+        <a href="examples.html">Examples</a>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">Tarcinapp Suite is actively developed. Docs evolve with the suite.</div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

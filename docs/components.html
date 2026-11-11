@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Components — Tarcinapp Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-mark">T</span>
+      <span class="logo-text">arcinapp<span class="logo-suite"> Suite</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="concepts.html">Concepts</a></li>
+      <li><a href="components.html">Components</a></li>
+      <li class="has-dropdown">
+        <a href="resources.html">Resources ▾</a>
+        <ul class="dropdown">
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="examples.html">Examples</a></li>
+          <li><a href="configuration.html">Configuration Reference</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="https://github.com/tarcinapp" class="btn-github" target="_blank" rel="noopener">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <span class="doc-sidebar-title">Services</span>
+    <a href="#eps">entity-persistence-service</a>
+    <a href="#gateway">entity-persistence-gateway</a>
+    <a href="#policies">gateway-policies</a>
+    <a href="#orchestrator">universal-orchestrator</a>
+    <a href="#gui">tarcinapp-base-gui</a>
+    <a href="#cache">entity-persistence-cache</a>
+    <span class="doc-sidebar-title">Infrastructure</span>
+    <a href="#infra">Infrastructure Services</a>
+    <a href="#planned">Planned Repos</a>
+  </aside>
+
+  <div class="doc-main">
+    <div class="page-header">
+      <div class="page-breadcrumb"><a href="index.html">Home</a> / Components</div>
+          <h1>Components</h1>
+          <p>Deep-dive reference for each repository in the Tarcinapp Suite.</p>
+    </div>
+
+  <main class="doc-content prose">
+
+    <!-- ── EPS ────────────────────────────────────────────────────────────── -->
+    <h2 id="eps">entity-persistence-service</h2>
+    <table>
+      <tbody>
+        <tr><td><strong>Layer</strong></td><td>V — Data</td></tr>
+        <tr><td><strong>Technology</strong></td><td>Node.js · LoopBack 4 · MongoDB</td></tr>
+        <tr><td><strong>Default Port</strong></td><td>3000</td></tr>
+        <tr><td><strong>Status</strong></td><td><span class="badge-impl">Implemented ✓</span></td></tr>
+        <tr><td><strong>GitHub</strong></td><td><a href="https://github.com/tarcinapp/entity-persistence-service" target="_blank" rel="noopener">tarcinapp/entity-persistence-service</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3>What It Does</h3>
+    <p>EPS is the data layer — the only component that talks directly to MongoDB. It is intentionally simple: it stores and retrieves JSON records with no domain intelligence, no authorization logic, and no business rules. All of that lives above it in the Gateway layer.</p>
+    <p>EPS exposes <strong>67 REST endpoints</strong> across 9 controllers, covering all five record types plus hierarchy traversal and through-access routes.</p>
+
+    <h3>Endpoint Groups</h3>
+    <table>
+      <thead><tr><th>Controller</th><th>Routes</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td>EntityController</td><td>11</td><td>CRUD + count + children/parents for entities</td></tr>
+        <tr><td>ListController</td><td>11</td><td>CRUD + count + children/parents for lists</td></tr>
+        <tr><td>ListEntityRelController</td><td>9</td><td>CRUD + count for list-entity relations</td></tr>
+        <tr><td>EntitiesThroughListController</td><td>4</td><td>Access entities via a list (traversal)</td></tr>
+        <tr><td>ListsThroughEntitiesController</td><td>2</td><td>Access lists via an entity</td></tr>
+        <tr><td>EntityReactionController</td><td>11</td><td>CRUD + count + children/parents for entity reactions</td></tr>
+        <tr><td>ReactionsThroughEntityController</td><td>4</td><td>Access reactions via an entity</td></tr>
+        <tr><td>ListReactionController</td><td>11</td><td>CRUD + count + children/parents for list reactions</td></tr>
+        <tr><td>ReactionsThroughListsController</td><td>4</td><td>Access reactions via a list</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Key Configuration</h3>
+    <table>
+      <thead><tr><th>Variable</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>ENTITY_KINDS</code></td><td>Comma-separated list of allowed <code>_kind</code> values for entities</td></tr>
+        <tr><td><code>LIST_KINDS</code></td><td>Allowed <code>_kind</code> values for lists</td></tr>
+        <tr><td><code>ENTITY_REACTION_KINDS</code></td><td>Allowed kinds for entity reactions</td></tr>
+        <tr><td><code>ENTITY_UNIQUENESS</code></td><td>Uniqueness rule templates using <code>${field}</code> interpolation</td></tr>
+        <tr><td><code>ENTITY_RECORD_LIMITS</code></td><td>JSON array of scoped record count limits</td></tr>
+        <tr><td><code>AUTOAPPROVE_ENTITY</code></td><td>Auto-set <code>_validFromDateTime</code> on create (<code>true</code>/<code>false</code>)</td></tr>
+        <tr><td><code>VISIBILITY_ENTITY</code></td><td>Default visibility for new entity records</td></tr>
+        <tr><td><code>MONGODB_URL</code></td><td>Full MongoDB connection string</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── GATEWAY ────────────────────────────────────────────────────────── -->
+    <h2 id="gateway">entity-persistence-gateway</h2>
+    <table>
+      <tbody>
+        <tr><td><strong>Layer</strong></td><td>III — Gateway &amp; Security</td></tr>
+        <tr><td><strong>Technology</strong></td><td>Java 21 · Spring Cloud Gateway · Spring Boot 3 · Redis</td></tr>
+        <tr><td><strong>Default Port</strong></td><td>8081</td></tr>
+        <tr><td><strong>Status</strong></td><td><span class="badge-impl">Implemented ✓</span></td></tr>
+        <tr><td><strong>GitHub</strong></td><td><a href="https://github.com/tarcinapp/entity-persistence-gateway" target="_blank" rel="noopener">tarcinapp/entity-persistence-gateway</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3>What It Does</h3>
+    <p>The gateway is the system's single entry point and its Policy Enforcement Point. No request reaches EPS without passing through all gateway checks. It has two broad responsibilities: security enforcement and domain transformation.</p>
+
+    <h3>Security Features</h3>
+    <ul>
+      <li><strong>JWT Authentication</strong> — validates RS256/HS256 tokens; supports multiple issuers (e.g., Keycloak + another IdP). Fails fast with 401 on expired or unsigned tokens.</li>
+      <li><strong>OPA Authorization</strong> — two-pass check on every request. Pass 1: operation allow/deny + visibility set injection. Pass 2: field-level allow/deny lists.</li>
+      <li><strong>Field Masking</strong> — removes forbidden fields from request bodies (before forwarding) and response bodies (before returning). The masking is structural: absent keys, not null values.</li>
+      <li><strong>Distributed Locking</strong> — Redis-backed lock per record ID for all write operations. Prevents lost updates in concurrent scenarios.</li>
+      <li><strong>Rate Limiting</strong> — per-kind sliding-window rate limiter backed by Redis. Configurable replenish rate and burst capacity per alias.</li>
+      <li><strong>Request Size Limiting</strong> — default 1 KB hard limit on request bodies. Configurable per kind alias.</li>
+    </ul>
+
+    <h3>Domain Transformation Features</h3>
+    <ul>
+      <li><strong>Kind Alias Routes</strong> — maps domain paths (<code>/books</code>, <code>/shelves</code>) to generic EPS paths with automatic <code>_kind</code> injection.</li>
+      <li><strong>JSON Schema Validation</strong> — per-kind schema validated against incoming request bodies before forwarding.</li>
+      <li><strong>Dynamic OAS Generation</strong> — generates a personalized OpenAPI spec per caller, shaped by their roles and OPA policies. Cached in Redis.</li>
+      <li><strong>Query Abstraction</strong> — adds simplified query parameters (<code>limit</code>, <code>skip</code>, <code>s</code>, <code>q</code>, <code>fieldset</code>) as aliases for LoopBack's verbose filter syntax.</li>
+      <li><strong>Saved Queries</strong> — named query templates resolvable via <code>?q=name</code>.</li>
+      <li><strong>Field Sets</strong> — named field projection presets resolvable via <code>?fieldset=name</code>.</li>
+      <li><strong>Response Caching</strong> — configurable Redis-backed local cache for GET responses. Automatically invalidated on writes.</li>
+    </ul>
+
+    <h3>Route Topology</h3>
+    <p>The gateway manages approximately <strong>140 routes</strong>: the base set of generic routes (EPS proxy) plus kind-alias routes (one per configured alias, including hierarchy and traversal sub-routes). Each route passes through a configured chain of filters.</p>
+
+    <!-- ── POLICIES ────────────────────────────────────────────────────────── -->
+    <h2 id="policies">entity-persistence-gateway-policies</h2>
+    <table>
+      <tbody>
+        <tr><td><strong>Layer</strong></td><td>III — Authorization</td></tr>
+        <tr><td><strong>Technology</strong></td><td>OPA (Open Policy Agent) · Rego</td></tr>
+        <tr><td><strong>Default Port</strong></td><td>8181 (OPA default)</td></tr>
+        <tr><td><strong>Status</strong></td><td><span class="badge-impl">Implemented ✓</span></td></tr>
+        <tr><td><strong>GitHub</strong></td><td><a href="https://github.com/tarcinapp/entity-persistence-gateway-policies" target="_blank" rel="noopener">tarcinapp/entity-persistence-gateway-policies</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3>What It Does</h3>
+    <p>This repository contains the Rego policies loaded into OPA. The gateway calls OPA on every authenticated request. The policies define the authorization rules that the gateway enforces.</p>
+
+    <h3>Policy Structure</h3>
+    <ul>
+      <li><strong>Operation policies</strong> — <code>allow</code>/<code>deny</code> decisions for each HTTP method + resource combination. A member can POST to <code>/books</code>. Only an editor can <code>PUT</code> (full replace). Only an admin can bulk-PATCH.</li>
+      <li><strong>Field policies</strong> — per-field <code>allowedFields</code> (for read) and <code>writableFields</code> (for write) per role. A member cannot write <code>_validFromDateTime</code>. A viewer cannot see <code>_ownerUsers</code>.</li>
+      <li><strong>Visibility injection</strong> — policies inject <code>sets</code> filters into every list query. A member query automatically gets <code>sets[actives]=true&sets[owners][userIds]=&lt;sub&gt;</code> — they can never see others' pending records even if they try to craft a filter to access them.</li>
+    </ul>
+
+    <h3>Role Naming Convention</h3>
+    <pre><code># Application-level roles (operation control)
+tarcinapp.records.entity.admin
+tarcinapp.records.entity.editor
+tarcinapp.records.entity.member
+
+# Field-level roles (field access control)
+tarcinapp.fields.entities._validFromDateTime.create
+tarcinapp.fields.entities._ownerUsers.update</code></pre>
+
+    <!-- ── ORCHESTRATOR ────────────────────────────────────────────────────── -->
+    <h2 id="orchestrator">entity-persistence-universal-orchestrator</h2>
+    <table>
+      <tbody>
+        <tr><td><strong>Layer</strong></td><td>IV — Orchestration</td></tr>
+        <tr><td><strong>Technology</strong></td><td>Java 17 · Quarkus · Apache Camel</td></tr>
+        <tr><td><strong>Default Port</strong></td><td>8082</td></tr>
+        <tr><td><strong>Status</strong></td><td><span class="badge-partial">Partial ◑</span></td></tr>
+        <tr><td><strong>GitHub</strong></td><td><a href="https://github.com/tarcinapp/entity-persistence-universal-orchestrator" target="_blank" rel="noopener">tarcinapp/entity-persistence-universal-orchestrator</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3>What It Does</h3>
+    <p>The orchestrator is an optional middleware that gives you a clean, well-structured integration point for custom business logic. It exposes Apache Camel routes for each EPS endpoint, with a <strong>PreProcessor</strong> that runs before forwarding to EPS and a <strong>PostProcessor</strong> that runs after receiving the response.</p>
+    <p>The orchestrator is designed to be <strong>cloned and extended</strong> — you fork it per product, implement your processors, and wire the gateway to point to your orchestrator instead of directly to EPS.</p>
+
+    <h3>Pipeline Pattern</h3>
+    <pre><code>Gateway → Orchestrator
+             → RouteBuilder (dispatches to correct route)
+               → PreProcessor (your logic: enrichment, validation, rejection)
+               → EntityPersistenceClient (calls back to Gateway → EPS)
+               → PostProcessor (your logic: side effects, enrichment)
+           → Gateway (field masking, response)</code></pre>
+
+    <h3>Available Patterns</h3>
+    <ul>
+      <li><strong>Auto-Enrich</strong> — fetch from an external service in PreProcessor and inject fields into the request body</li>
+      <li><strong>Quota Enforcement</strong> — count existing records and short-circuit with 422 if the limit is exceeded</li>
+      <li><strong>Async Notification</strong> — in PostProcessor, publish an event to RabbitMQ/Kafka after a successful write</li>
+      <li><strong>Response Aggregation</strong> — make multiple EPS calls and merge the results in PostProcessor</li>
+      <li><strong>Cascade Soft-Delete</strong> — on entity delete, also soft-delete all related reactions</li>
+    </ul>
+
+    <h3>EntityPersistenceClient</h3>
+    <div class="callout callout-warn">
+      <p><strong>Important:</strong> The <code>EntityPersistenceClient</code> always calls back through the Gateway — not directly to EPS. This ensures all authorization and field masking is applied even on internal calls. Always forward the original Bearer token when using it.</p>
+    </div>
+
+    <!-- ── GUI ────────────────────────────────────────────────────────────── -->
+    <h2 id="gui">tarcinapp-base-gui</h2>
+    <table>
+      <tbody>
+        <tr><td><strong>Layer</strong></td><td>I — Client</td></tr>
+        <tr><td><strong>Technology</strong></td><td>React 18 · Vite · Tailwind CSS · React Router v6</td></tr>
+        <tr><td><strong>Default Port</strong></td><td>5173 (dev) / varies in production</td></tr>
+        <tr><td><strong>Status</strong></td><td><span class="badge-partial">Partial ◑</span></td></tr>
+        <tr><td><strong>GitHub</strong></td><td><a href="https://github.com/tarcinapp/tarcinapp-base-gui" target="_blank" rel="noopener">tarcinapp/tarcinapp-base-gui</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3>What It Does</h3>
+    <p>A domain-agnostic admin and explorer UI. On first load, it fetches the live OpenAPI spec from the connected Gateway and builds the entire interface from it: navigation, data grids, create forms, edit modals, and traversal pages. No hardcoded domain knowledge. The same unmodified codebase serves as the UI for a books app, a product catalog, a CRM, or any other domain.</p>
+
+    <h3>OAS-Driven Rendering</h3>
+    <ul>
+      <li><strong>Sidebar navigation</strong> — one entry per OAS tag that owns a root collection endpoint. Sorted by <code>x-base-record-type</code> (entity → list → relation → reaction).</li>
+      <li><strong>Data grids</strong> — columns derived from actual response data. System fields shown first, then custom fields alphabetically.</li>
+      <li><strong>Create forms</strong> — fields from the POST request body schema. Boolean → toggle, enum → select, datetime → datetime-local, array → chip input.</li>
+      <li><strong>Edit modals</strong> — inline PATCH editing. Multiple fields can be staged before a single PATCH submission.</li>
+      <li><strong>Traversal pages</strong> — sub-resource pages (e.g., <code>/books/{id}/chapters</code>) from OAS path patterns.</li>
+    </ul>
+
+    <h3>Two Connection Modes</h3>
+    <ul>
+      <li><strong>Live mode</strong> — connect to a running Gateway URL with a Bearer token. The JWT is validated client-side before connecting (expiry, structure). Username and roles from the token are displayed as a preview.</li>
+      <li><strong>Offline / drag-and-drop</strong> — drop a local <code>.json</code> OAS file onto the setup screen. The full interface is built from the local spec. Useful for previewing domain projections before deploying.</li>
+    </ul>
+
+    <h3>Pages</h3>
+    <table>
+      <thead><tr><th>Page</th><th>Route</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Dashboard</td><td><code>/</code></td><td>Resource stat cards from count endpoints</td></tr>
+        <tr><td>Resource List</td><td><code>/r/:tagSlug</code></td><td>Paginated data grid with filters, search, sort, fieldset selector</td></tr>
+        <tr><td>Item Detail</td><td><code>/r/:tagSlug/item/:id</code></td><td>Single record view with inline PATCH editing and delete</td></tr>
+        <tr><td>Traversal</td><td><code>/r/:tagSlug/:subResource</code></td><td>Sub-resource navigation (e.g., chapters of a book)</td></tr>
+        <tr><td>Setup</td><td>_(modal)_</td><td>Connect to gateway or upload a local spec</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── CACHE ──────────────────────────────────────────────────────────── -->
+    <h2 id="cache">entity-persistence-cache</h2>
+    <table>
+      <tbody>
+        <tr><td><strong>Layer</strong></td><td>V — Data (caching)</td></tr>
+        <tr><td><strong>Status</strong></td><td><span class="badge-partial">Partial ◑</span></td></tr>
+        <tr><td><strong>GitHub</strong></td><td><a href="https://github.com/tarcinapp/entity-persistence-cache" target="_blank" rel="noopener">tarcinapp/entity-persistence-cache</a></td></tr>
+      </tbody>
+    </table>
+    <p>A caching layer component for EPS response caching. The gateway also has its own Redis-backed response cache. Consult the repository for current status and integration instructions.</p>
+
+    <!-- ── INFRA ───────────────────────────────────────────────────────────── -->
+    <h2 id="infra">Infrastructure Services</h2>
+    <p>These are standard infrastructure products deployed as-is — they do not have custom Tarcinapp repositories:</p>
+    <table>
+      <thead><tr><th>Service</th><th>Role</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><strong>MongoDB</strong></td><td>Primary data store</td><td>All five record type collections. Index on <code>_kind</code>, <code>_createdBy</code>, <code>_validFromDateTime</code> recommended.</td></tr>
+        <tr><td><strong>Redis</strong></td><td>Distributed locking, rate limiting, response caching</td><td>Used by the gateway. Any Redis-compatible server works (Redis, Valkey, Upstash).</td></tr>
+        <tr><td><strong>Keycloak</strong></td><td>Identity provider, JWT issuance</td><td>Tarcinapp expects JWTs with <code>sub</code>, <code>iss</code>, <code>exp</code>, and role claims in a <code>resource_access</code> or <code>realm_access</code> structure.</td></tr>
+        <tr><td><strong>OPA</strong></td><td>Policy engine</td><td>Deployed alongside the gateway. The gateway-policies repo provides the Rego policies to load.</td></tr>
+        <tr><td><strong>Nginx</strong></td><td>Ingress, TLS termination</td><td>Routes <code>/auth</code> → Keycloak, <code>/api</code> → Gateway, <code>/search</code> → Search Gateway (planned).</td></tr>
+        <tr><td><strong>RabbitMQ</strong></td><td>Async work queue</td><td>Optional. Used by Orchestrator PostProcessors for async side effects.</td></tr>
+        <tr><td><strong>Kafka / Redpanda</strong></td><td>Event backbone</td><td>Planned Event Layer.</td></tr>
+        <tr><td><strong>Meilisearch</strong></td><td>Full-text search</td><td>Planned. <code>entity-search-gateway</code> will proxy to it.</td></tr>
+        <tr><td><strong>S3 / MinIO</strong></td><td>Object storage</td><td>Planned. <code>entity-s3-orchestrator</code> will handle uploads.</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── PLANNED ─────────────────────────────────────────────────────────── -->
+    <h2 id="planned">Planned Repositories</h2>
+    <p>These components are part of the full architecture vision but do not have repositories yet:</p>
+    <table>
+      <thead><tr><th>Repository</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>tarcinapp-ingress-proxy</code></td><td>Custom Nginx configuration for edge routing</td></tr>
+        <tr><td><code>tarcinapp-ui-server</code></td><td>SSR engine for dynamic SaaS frontends</td></tr>
+        <tr><td><code>entity-search-gateway</code></td><td>Read-only search proxy over Meilisearch</td></tr>
+        <tr><td><code>entity-persistence-bff-orchestrator</code></td><td>Page-aggregator BFF for SSR UIs</td></tr>
+        <tr><td><code>entity-search-indexer</code></td><td>Camel Quarkus CDC → Meilisearch writer</td></tr>
+        <tr><td><code>entity-s3-orchestrator</code></td><td>S3-compatible object storage integration</td></tr>
+        <tr><td><code>entity-cdc-event-producer</code></td><td>Debezium-based CDC connector config/wrapper</td></tr>
+        <tr><td><code>entity-event-transformer</code></td><td>Camel Quarkus domain event transformer</td></tr>
+        <tr><td><code>entity-event-consumer</code></td><td>Reactive event consumer</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+  </div><!-- /.doc-main -->
+</div><!-- /.doc-layout -->
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark">T</span>
+      <span class="footer-name">Tarcinapp Suite</span>
+      <span class="footer-tagline">Backend-as-configuration for SaaS builders</span>
+    </div>
+    <nav class="footer-nav">
+      <div class="footer-col">
+        <span class="footer-col-title">Documentation</span>
+        <a href="architecture.html">Architecture</a>
+        <a href="concepts.html">Concepts</a>
+        <a href="components.html">Components</a>
+        <a href="configuration.html">Configuration</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">Resources</span>
+        <a href="getting-started.html">Getting Started</a>
+        <a href="examples.html">Examples</a>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">Tarcinapp Suite is actively developed. Docs evolve with the suite.</div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

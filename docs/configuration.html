@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuration Reference — Tarcinapp Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-mark">T</span>
+      <span class="logo-text">arcinapp<span class="logo-suite"> Suite</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="concepts.html">Concepts</a></li>
+      <li><a href="components.html">Components</a></li>
+      <li class="has-dropdown">
+        <a href="resources.html">Resources ▾</a>
+        <ul class="dropdown">
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="examples.html">Examples</a></li>
+          <li><a href="configuration.html">Configuration Reference</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="https://github.com/tarcinapp" class="btn-github" target="_blank" rel="noopener">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <span class="doc-sidebar-title">EPS</span>
+    <a href="#eps-server">Server</a>
+    <a href="#eps-database">Database</a>
+    <a href="#eps-kinds">Allowed Kinds</a>
+    <a href="#eps-lifecycle">Lifecycle</a>
+    <a href="#eps-uniqueness">Uniqueness</a>
+    <a href="#eps-limits">Record Limits</a>
+    <a href="#eps-response">Response Limits</a>
+    <span class="doc-sidebar-title">Gateway</span>
+    <a href="#gw-app">App Identity</a>
+    <a href="#gw-auth">Authentication</a>
+    <a href="#gw-backend">Backend &amp; OPA</a>
+    <a href="#gw-ratelimit">Rate Limiting</a>
+    <a href="#gw-kind-alias">Kind Alias Paths</a>
+    <a href="#gw-queries">Saved Queries</a>
+    <a href="#gw-fieldsets">Field Sets</a>
+    <span class="doc-sidebar-title">Orchestrator</span>
+    <a href="#orch-config">Orchestrator Config</a>
+    <span class="doc-sidebar-title">GUI</span>
+    <a href="#gui-config">GUI Config</a>
+  </aside>
+
+  <div class="doc-main">
+    <div class="page-header">
+      <div class="page-breadcrumb"><a href="index.html">Home</a> / <a href="resources.html">Resources</a> / Configuration Reference</div>
+          <h1>Configuration Reference</h1>
+          <p>All environment variables and configuration keys for every Tarcinapp component.</p>
+    </div>
+
+  <main class="doc-content prose">
+
+    <div class="callout">
+      <p><strong>Naming conventions:</strong> EPS uses <code>UPPER_SNAKE_CASE</code> env vars directly. Gateway uses Spring Boot property style: <code>app.some.thing</code> → env var <code>APP_SOME_THING</code>. Indexed arrays: <code>APP_KINDALIASPATHS_0_ALIAS=books</code>. Orchestrator uses MicroProfile Config: <code>property.key</code> → <code>PROPERTY_KEY</code>.</p>
+    </div>
+
+    <!-- ── EPS ────────────────────────────────────────────────────────────── -->
+    <h2 id="eps-server">EPS — Server</h2>
+    <table>
+      <thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>NODE_ENV</code></td><td>string</td><td><code>production</code></td><td>Node environment (<code>development</code>, <code>production</code>, <code>test</code>)</td></tr>
+        <tr><td><code>HOST</code></td><td>string</td><td><code>0.0.0.0</code></td><td>Bind address</td></tr>
+        <tr><td><code>PORT</code></td><td>integer</td><td><code>3000</code></td><td>HTTP listen port</td></tr>
+        <tr><td><code>LOG_LEVEL</code></td><td>string</td><td><code>info</code></td><td>Log level: <code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code></td></tr>
+        <tr><td><code>LOG_FORMAT</code></td><td>string</td><td><code>json</code></td><td><code>json</code> or <code>text</code></td></tr>
+        <tr><td><code>REQUEST_ID_HEADER</code></td><td>string</td><td><code>X-Request-ID</code></td><td>Header name for request ID propagation. Must match gateway setting.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout callout-warn">
+      <p><strong>Header Alignment:</strong> EPS default is <code>X-Request-ID</code> (capital D). Gateway default is <code>X-Request-Id</code> (lowercase d). These must match — set <code>APP_REQUESTID=X-Request-ID</code> on the gateway or change EPS to match.</p>
+    </div>
+
+    <h2 id="eps-database">EPS — Database</h2>
+    <table>
+      <thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>MONGODB_URL</code></td><td>string</td><td>—</td><td><strong>Full MongoDB URI.</strong> Takes precedence over individual params. Use for Atlas or <code>mongodb+srv://</code> style.</td></tr>
+        <tr><td><code>MONGODB_HOST</code></td><td>string</td><td><code>localhost</code></td><td>Ignored if <code>MONGODB_URL</code> is set</td></tr>
+        <tr><td><code>MONGODB_PORT</code></td><td>integer</td><td><code>27017</code></td><td>Ignored if <code>MONGODB_URL</code> is set</td></tr>
+        <tr><td><code>MONGODB_DATABASE</code></td><td>string</td><td><code>tarcinapp</code></td><td>Database name</td></tr>
+        <tr><td><code>MONGODB_USER</code></td><td>string</td><td>—</td><td>MongoDB username</td></tr>
+        <tr><td><code>MONGODB_PASSWORD</code></td><td>string</td><td>—</td><td>MongoDB password</td></tr>
+        <tr><td><code>COLLECTION_ENTITY</code></td><td>string</td><td><code>entities</code></td><td>Collection name override for entities</td></tr>
+        <tr><td><code>COLLECTION_LIST</code></td><td>string</td><td><code>lists</code></td><td>Collection name override for lists</td></tr>
+        <tr><td><code>COLLECTION_LIST_ENTITY_REL</code></td><td>string</td><td><code>list-entity-relations</code></td><td>Collection name override for relations</td></tr>
+        <tr><td><code>COLLECTION_ENTITY_REACTIONS</code></td><td>string</td><td><code>entity-reactions</code></td><td>Collection name override for entity reactions</td></tr>
+        <tr><td><code>COLLECTION_LIST_REACTIONS</code></td><td>string</td><td><code>list-reactions</code></td><td>Collection name override for list reactions</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="eps-kinds">EPS — Allowed Kinds</h2>
+    <table>
+      <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>ENTITY_KINDS</code></td><td><em>any</em></td><td>Comma-separated allowed <code>_kind</code> values for entities. Empty = no restriction.</td></tr>
+        <tr><td><code>LIST_KINDS</code></td><td><em>any</em></td><td>Allowed kinds for lists.</td></tr>
+        <tr><td><code>LIST_ENTITY_REL_KINDS</code></td><td><em>any</em></td><td>Allowed kinds for relations.</td></tr>
+        <tr><td><code>ENTITY_REACTION_KINDS</code></td><td><em>any</em></td><td>Allowed kinds for entity reactions.</td></tr>
+        <tr><td><code>LIST_REACTION_KINDS</code></td><td><em>any</em></td><td>Allowed kinds for list reactions.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="eps-lifecycle">EPS — Lifecycle &amp; Visibility Defaults</h2>
+    <table>
+      <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>AUTOAPPROVE_ENTITY</code></td><td><code>false</code></td><td>Auto-set <code>_validFromDateTime</code> to now on entity create</td></tr>
+        <tr><td><code>AUTOAPPROVE_LIST</code></td><td><code>false</code></td><td>Same for lists</td></tr>
+        <tr><td><code>AUTOAPPROVE_LIST_ENTITY_REL</code></td><td><code>false</code></td><td>Same for relations</td></tr>
+        <tr><td><code>AUTOAPPROVE_ENTITY_REACTION</code></td><td><code>false</code></td><td>Same for entity reactions</td></tr>
+        <tr><td><code>AUTOAPPROVE_LIST_REACTION</code></td><td><code>false</code></td><td>Same for list reactions</td></tr>
+        <tr><td><code>VISIBILITY_ENTITY</code></td><td><code>private</code></td><td>Default <code>_visibility</code> for new entities: <code>public</code>, <code>protected</code>, or <code>private</code></td></tr>
+        <tr><td><code>VISIBILITY_LIST</code></td><td><code>private</code></td><td>Default visibility for lists</td></tr>
+        <tr><td><code>VISIBILITY_ENTITY_REACTION</code></td><td><code>private</code></td><td>Default visibility for entity reactions</td></tr>
+        <tr><td><code>VISIBILITY_LIST_REACTION</code></td><td><code>private</code></td><td>Default visibility for list reactions</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="eps-uniqueness">EPS — Uniqueness Constraints</h2>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>ENTITY_UNIQUENESS</code></td><td>Uniqueness rule(s) for entities</td></tr>
+        <tr><td><code>LIST_UNIQUENESS</code></td><td>Uniqueness rule(s) for lists</td></tr>
+        <tr><td><code>RELATION_UNIQUENESS</code></td><td>Uniqueness for relations</td></tr>
+        <tr><td><code>ENTITY_REACTION_UNIQUENESS</code></td><td>Uniqueness for entity reactions</td></tr>
+        <tr><td><code>LIST_REACTION_UNIQUENESS</code></td><td>Uniqueness for list reactions</td></tr>
+      </tbody>
+    </table>
+    <p>Format: a filter template string using <code>where[field]=${field}</code> interpolation. <code>${field}</code> is replaced with the value from the record being created. Multiple rules are comma-separated — a record must not violate <em>any</em> rule.</p>
+    <pre><code># Entities unique by kind + slug + creator (per-user uniqueness)
+ENTITY_UNIQUENESS="where[_kind]=${_kind}&where[_slug]=${_slug}&where[_createdBy]=${_createdBy}"
+
+# Multiple rules: above rule + publisher names globally unique
+ENTITY_UNIQUENESS="where[_kind]=${_kind}&where[_slug]=${_slug}&where[_createdBy]=${_createdBy},where[_kind]=publisher&where[_slug]=${_slug}"
+
+# One rating per user per book
+ENTITY_REACTION_UNIQUENESS="where[_kind]=rating&where[_entityId]=${_entityId}&sets[owners][userIds]=${_createdBy}"</code></pre>
+
+    <h2 id="eps-limits">EPS — Record Limits</h2>
+    <p>Record limits restrict how many records a user can create within a given scope. Configured as a JSON array:</p>
+    <pre><code># Max 3 wishlists per user
+LIST_RECORD_LIMITS='[{"scope":"where[_kind]=wishlist","limit":3}]'
+
+# Max 10 books globally
+ENTITY_RECORD_LIMITS='[{"scope":"where[_kind]=book","limit":10,"global":true}]'
+
+# Multiple rules
+ENTITY_RECORD_LIMITS='[
+  {"scope":"where[_kind]=book","limit":50},
+  {"scope":"where[_kind]=book","limit":200,"global":true}
+]'</code></pre>
+
+    <h2 id="eps-response">EPS — Response Limits</h2>
+    <table>
+      <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>RESPONSE_LIMIT_ENTITY</code></td><td><code>100</code></td><td>Max records per response for entities</td></tr>
+        <tr><td><code>RESPONSE_LIMIT_LIST</code></td><td><code>100</code></td><td>Max records per response for lists</td></tr>
+        <tr><td><code>RESPONSE_LIMIT_LIST_ENTITY_REL</code></td><td><code>100</code></td><td>Max records per response for relations</td></tr>
+        <tr><td><code>RESPONSE_LIMIT_ENTITY_REACTION</code></td><td><code>100</code></td><td>Max records per response for entity reactions</td></tr>
+        <tr><td><code>RESPONSE_LIMIT_LIST_REACTION</code></td><td><code>100</code></td><td>Max records per response for list reactions</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── GATEWAY ────────────────────────────────────────────────────────── -->
+    <h2 id="gw-app">Gateway — Application Identity</h2>
+    <table>
+      <thead><tr><th>Property</th><th>Env Var</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>app.name</code></td><td><code>APP_NAME</code></td><td>Application name. Used in OAS info block and Keycloak resource access claim key.</td></tr>
+        <tr><td><code>app.shortcode</code></td><td><code>APP_SHORTCODE</code></td><td>Short lowercase code (e.g. <code>books</code>). Propagated in logs and OTel resource attributes.</td></tr>
+        <tr><td><code>app.base-uri</code></td><td><code>APP_BASE_URI</code></td><td>Base path prefix for all routes. Default: <code>/api/v1</code>.</td></tr>
+        <tr><td><code>app.inbound.port</code></td><td><code>APP_INBOUND_PORT</code></td><td>Gateway listen port. Default: <code>8081</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="gw-auth">Gateway — Authentication</h2>
+    <table>
+      <thead><tr><th>Property</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>app.auth.jwt.issuer</code></td><td>Expected JWT <code>iss</code> claim. Must match exactly.</td></tr>
+        <tr><td><code>app.auth.jwt.jwk-set-uri</code></td><td>JWKS endpoint URL for RS256 key fetching (e.g. Keycloak's <code>/.well-known/jwks.json</code>).</td></tr>
+        <tr><td><code>app.auth.jwt.secret</code></td><td>Static HMAC secret for HS256 tokens (dev use only).</td></tr>
+        <tr><td><code>app.auth.jwt.additional-issuers[N].issuer</code></td><td>Additional trusted JWT issuer (for multi-provider setups).</td></tr>
+        <tr><td><code>app.auth.jwt.additional-issuers[N].jwk-set-uri</code></td><td>JWKS endpoint for the additional issuer.</td></tr>
+        <tr><td><code>app.auth.roles.claim-path</code></td><td>JSONPath to the roles array in the JWT. Default: <code>resource_access.{app.name}.roles</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="gw-backend">Gateway — Backend &amp; OPA</h2>
+    <table>
+      <thead><tr><th>Property</th><th>Env Var</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>app.backend.host</code></td><td><code>APP_BACKEND_HOST</code></td><td>URL of the backend: EPS (direct) or Orchestrator (if used). Example: <code>http://localhost:3000</code>.</td></tr>
+        <tr><td><code>app.opa.host</code></td><td><code>APP_OPA_HOST</code></td><td>OPA base URL. Example: <code>http://localhost:8181</code>.</td></tr>
+        <tr><td><code>app.opa.policy-path</code></td><td><code>APP_OPA_POLICY_PATH</code></td><td>OPA policy endpoint path. Default: <code>/v1/data/tarcinapp</code>.</td></tr>
+        <tr><td><code>app.redis.host</code></td><td><code>APP_REDIS_HOST</code></td><td>Redis host. Default: <code>localhost</code>.</td></tr>
+        <tr><td><code>app.redis.port</code></td><td><code>APP_REDIS_PORT</code></td><td>Redis port. Default: <code>6379</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="gw-ratelimit">Gateway — Rate Limiting</h2>
+    <table>
+      <thead><tr><th>Property</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>app.inbound.rateLimiter.replenishRate</code></td><td>Global default: tokens added per second</td></tr>
+        <tr><td><code>app.inbound.rateLimiter.burstCapacity</code></td><td>Global default: max burst tokens</td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_RATELIMITER_REPLENISHRATE</code></td><td>Per-alias override: replenish rate</td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_RATELIMITER_BURSTCAPACITY</code></td><td>Per-alias override: burst capacity</td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_MAXREQUESTSIZE</code></td><td>Per-alias max request body size (e.g. <code>10KB</code>). Default: <code>1KB</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="gw-kind-alias">Gateway — Kind Alias Paths</h2>
+    <p>Each kind alias is a set of indexed environment variables sharing the same index <code>N</code> (0-based). All variables for one alias must use the same index.</p>
+    <table>
+      <thead><tr><th>Variable</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>APP_KINDALIASPATHS_N_ALIAS</code></td><td>✓ Yes</td><td>URL path segment (plural). Example: <code>books</code></td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_NAME</code></td><td>✓ Yes</td><td><code>_kind</code> value to inject. Example: <code>book</code></td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_SCHEMA</code></td><td>No</td><td>JSON Schema string for request body validation</td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_HIERARCHYALIAS</code></td><td>No</td><td>Child route path segment. Example: <code>chapters</code> → <code>/books/{id}/chapters</code></td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_HIERARCHYNAME</code></td><td>No</td><td><code>_kind</code> value for children. Example: <code>chapter</code></td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_RATELIMITER_REPLENISHRATE</code></td><td>No</td><td>Rate limiter replenish rate override for this alias</td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_RATELIMITER_BURSTCAPACITY</code></td><td>No</td><td>Rate limiter burst capacity override</td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_MAXREQUESTSIZE</code></td><td>No</td><td>Max request body size override</td></tr>
+        <tr><td><code>APP_KINDALIASPATHS_N_DISABLED</code></td><td>No</td><td>Set to <code>true</code> to disable this alias's routes entirely</td></tr>
+      </tbody>
+    </table>
+    <pre><code># Example: books alias with chapters hierarchy
+APP_KINDALIASPATHS_0_ALIAS=books
+APP_KINDALIASPATHS_0_NAME=book
+APP_KINDALIASPATHS_0_SCHEMA={"type":"object","required":["author"]}
+APP_KINDALIASPATHS_0_HIERARCHYALIAS=chapters
+APP_KINDALIASPATHS_0_HIERARCHYNAME=chapter
+APP_KINDALIASPATHS_0_RATELIMITER_REPLENISHRATE=10
+APP_KINDALIASPATHS_0_RATELIMITER_BURSTCAPACITY=20</code></pre>
+
+    <h2 id="gw-queries">Gateway — Saved Queries</h2>
+    <p>Named query presets. Called via <code>?q=name</code>. Configured as indexed arrays:</p>
+    <pre><code>APP_QUERIES_0_NAME=my
+APP_QUERIES_0_QUERY=sets[owners][userIds]=${sub}
+
+APP_QUERIES_1_NAME=popular
+APP_QUERIES_1_QUERY=sets[actives]=true&filter[order]=viewCount%20DESC&filter[limit]=20</code></pre>
+    <p>The <code>${sub}</code> placeholder is replaced at query time with the JWT <code>sub</code> claim.</p>
+
+    <h2 id="gw-fieldsets">Gateway — Field Sets</h2>
+    <p>Named field projections. Called via <code>?fieldset=name</code>:</p>
+    <pre><code>APP_FIELDSETS_0_NAME=summary
+APP_FIELDSETS_0_FIELDS=_id,_name,_kind,_visibility,author,genre
+
+APP_FIELDSETS_0_NAME=full
+APP_FIELDSETS_0_FIELDS=*</code></pre>
+
+    <!-- ── ORCHESTRATOR ────────────────────────────────────────────────────── -->
+    <h2 id="orch-config">Orchestrator Configuration</h2>
+    <table>
+      <thead><tr><th>Property</th><th>Env Var</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>app.backend.base-url</code></td><td><code>APP_BACKEND_BASE_URL</code></td><td>URL of the Gateway (for the EntityPersistenceClient callbacks). Example: <code>http://localhost:8081</code>.</td></tr>
+        <tr><td><code>app.server.port</code></td><td><code>APP_SERVER_PORT</code></td><td>Orchestrator listen port. Default: <code>8082</code>.</td></tr>
+        <tr><td><code>quarkus.log.level</code></td><td><code>QUARKUS_LOG_LEVEL</code></td><td>Log level. Default: <code>INFO</code>.</td></tr>
+        <tr><td><code>quarkus.otel.exporter.otlp.endpoint</code></td><td>—</td><td>OpenTelemetry OTLP collector endpoint for traces.</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── GUI ────────────────────────────────────────────────────────────── -->
+    <h2 id="gui-config">GUI Configuration</h2>
+    <table>
+      <thead><tr><th>Env Var</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>TAPP_API_ENDPOINT</code></td><td>Override Gateway URL at build time. Overrides any value stored in localStorage.</td></tr>
+        <tr><td><code>TAPP_API_TOKEN</code></td><td>Override Bearer token at build time. Use for automated / embedded deployments.</td></tr>
+      </tbody>
+    </table>
+    <p>Configuration is otherwise stored in <code>localStorage</code> under key <code>tarcinapp_config</code> as <code>{"endpoint":"...","token":"...","bypassCache":true}</code>.</p>
+
+  </main>
+  </div><!-- /.doc-main -->
+</div><!-- /.doc-layout -->
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark">T</span>
+      <span class="footer-name">Tarcinapp Suite</span>
+      <span class="footer-tagline">Backend-as-configuration for SaaS builders</span>
+    </div>
+    <nav class="footer-nav">
+      <div class="footer-col">
+        <span class="footer-col-title">Documentation</span>
+        <a href="architecture.html">Architecture</a>
+        <a href="concepts.html">Concepts</a>
+        <a href="components.html">Components</a>
+        <a href="configuration.html">Configuration</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">Resources</span>
+        <a href="getting-started.html">Getting Started</a>
+        <a href="examples.html">Examples</a>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">Tarcinapp Suite is actively developed. Docs evolve with the suite.</div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

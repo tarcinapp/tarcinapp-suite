@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Architecture — Tarcinapp Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-mark">T</span>
+      <span class="logo-text">arcinapp<span class="logo-suite"> Suite</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="concepts.html">Concepts</a></li>
+      <li><a href="components.html">Components</a></li>
+      <li class="has-dropdown">
+        <a href="resources.html">Resources ▾</a>
+        <ul class="dropdown">
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="examples.html">Examples</a></li>
+          <li><a href="configuration.html">Configuration Reference</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="https://github.com/tarcinapp" class="btn-github" target="_blank" rel="noopener">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <span class="doc-sidebar-title">Overview</span>
+    <a href="#philosophy">Core Philosophy</a>
+    <a href="#layers">Architectural Layers</a>
+    <a href="#current-topology">Current Topology</a>
+    <a href="#target-topology">Target Topology</a>
+    <span class="doc-sidebar-title">Layers Detail</span>
+    <a href="#layer-client">Client Layer</a>
+    <a href="#layer-idm">Identity Management</a>
+    <a href="#layer-gateway">Gateway &amp; Security</a>
+    <a href="#layer-orch">Orchestration</a>
+    <a href="#layer-data">Data Layer</a>
+    <a href="#layer-events">Event Layer</a>
+    <span class="doc-sidebar-title">Runtime</span>
+    <a href="#request-flow">Request Flow</a>
+    <a href="#gateway-transforms">Gateway Transforms</a>
+    <a href="#cross-cutting">Cross-Cutting Concerns</a>
+  </aside>
+
+  <div class="doc-main">
+    <div class="page-header">
+      <div class="page-breadcrumb"><a href="index.html">Home</a> / Architecture</div>
+          <h1>Architecture</h1>
+          <p>How Tarcinapp's six layers work together to deliver a full SaaS backend — from the browser to MongoDB.</p>
+    </div>
+
+  <main class="doc-content prose">
+
+    <h2 id="philosophy">Core Philosophy</h2>
+    <p>Tarcinapp is built around one central insight: <strong>the vast majority of SaaS backends solve the same structural problems</strong> — multi-tenancy, access control, lifecycle management, and domain-specific CRUD APIs. The application-level difference between a bookstore API and a product catalog API is mostly naming and schema constraints, not architecture.</p>
+    <p>The suite separates two concerns that are almost always conflated:</p>
+    <ul>
+      <li><strong>Structural concerns</strong> — authentication, authorization, data model, query language, lifecycle: Tarcinapp handles these as infrastructure.</li>
+      <li><strong>Domain concerns</strong> — which fields does a "book" have? What happens when an order is placed? What validation is specific to your business? These belong in configuration and the Orchestration Layer.</li>
+    </ul>
+    <p>The result: a new domain entity is a handful of environment variables. A new authorization rule is a Rego policy. Custom business logic has exactly one well-defined home.</p>
+
+    <h2 id="layers">Architectural Layers</h2>
+    <p>The system is organized into six logical layers, each with a single clear responsibility:</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 720 480" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:720px;font-family:Inter,sans-serif">
+        <style>
+          .lyr-box { rx:10; ry:10; }
+          .lyr-title { font-weight:700; font-size:13px; }
+          .lyr-sub { font-size:11px; fill:#888; }
+          .lyr-badge { font-size:10px; font-weight:600; }
+          .lyr-arrow { stroke-width:1.5; marker-end:url(#arr); }
+        </style>
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#888"/>
+          </marker>
+        </defs>
+        <!-- Layer I: Client -->
+        <rect x="40" y="20" width="640" height="56" rx="10" fill="#EEF2FF" stroke="#818CF8" stroke-width="1.5"/>
+        <text x="60" y="46" class="lyr-title" fill="#4338CA">I. Client Layer</text>
+        <text x="60" y="62" class="lyr-sub">tarcinapp-base-gui (React 18 / Vite) · planned: tarcinapp-ui-server (SSR)</text>
+        <rect x="610" y="30" width="60" height="18" rx="9" fill="#C7D2FE"/>
+        <text x="640" y="43" text-anchor="middle" class="lyr-badge" fill="#4338CA">partial</text>
+        <!-- Arrow -->
+        <line x1="360" y1="76" x2="360" y2="96" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+        <!-- Layer II: IdM -->
+        <rect x="40" y="96" width="640" height="56" rx="10" fill="#F0FDF4" stroke="#4ADE80" stroke-width="1.5"/>
+        <text x="60" y="122" class="lyr-title" fill="#15803D">II. Identity Management</text>
+        <text x="60" y="138" class="lyr-sub">Keycloak (infrastructure) — JWT issuance, OAuth2/OIDC, role assignment</text>
+        <rect x="590" y="106" width="80" height="18" rx="9" fill="#BBF7D0"/>
+        <text x="630" y="119" text-anchor="middle" class="lyr-badge" fill="#15803D">infra only</text>
+        <!-- Arrow -->
+        <line x1="360" y1="152" x2="360" y2="172" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+        <!-- Layer III: Gateway -->
+        <rect x="40" y="172" width="640" height="72" rx="10" fill="#FDF4FF" stroke="#A855F7" stroke-width="1.5"/>
+        <text x="60" y="198" class="lyr-title" fill="#7E22CE">III. Gateway &amp; Security Layer</text>
+        <text x="60" y="215" class="lyr-sub">entity-persistence-gateway (Spring Cloud Gateway) · entity-persistence-gateway-policies (OPA/Rego)</text>
+        <text x="60" y="233" class="lyr-sub">Auth · Authz · Field Masking · Domain Projection · Rate Limiting · Distributed Lock · OAS Generation</text>
+        <rect x="607" y="182" width="63" height="18" rx="9" fill="#E9D5FF"/>
+        <text x="638" y="195" text-anchor="middle" class="lyr-badge" fill="#7E22CE">✓ live</text>
+        <!-- Arrow -->
+        <line x1="360" y1="244" x2="360" y2="264" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+        <!-- Layer IV: Orchestration -->
+        <rect x="40" y="264" width="640" height="56" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.5"/>
+        <text x="60" y="290" class="lyr-title" fill="#92400E">IV. Orchestration Layer (optional)</text>
+        <text x="60" y="306" class="lyr-sub">universal-orchestrator (Quarkus + Apache Camel) — PreProcessor / PostProcessor hooks per endpoint</text>
+        <rect x="593" y="274" width="77" height="18" rx="9" fill="#FEF3C7"/>
+        <text x="631" y="287" text-anchor="middle" class="lyr-badge" fill="#92400E">partial</text>
+        <!-- Arrow -->
+        <line x1="360" y1="320" x2="360" y2="340" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+        <!-- Layer V: Data -->
+        <rect x="40" y="340" width="640" height="56" rx="10" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+        <text x="60" y="366" class="lyr-title" fill="#1D4ED8">V. Data, Search &amp; Storage Layer</text>
+        <text x="60" y="382" class="lyr-sub">entity-persistence-service (LoopBack 4/MongoDB) · Redis · planned: entity-search-gateway · S3</text>
+        <rect x="607" y="350" width="63" height="18" rx="9" fill="#DBEAFE"/>
+        <text x="638" y="363" text-anchor="middle" class="lyr-badge" fill="#1D4ED8">✓ live</text>
+        <!-- Arrow -->
+        <line x1="360" y1="396" x2="360" y2="416" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+        <!-- Layer VI: Events -->
+        <rect x="40" y="416" width="640" height="52" rx="10" fill="#FFF1F2" stroke="#FB7185" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <text x="60" y="440" class="lyr-title" fill="#BE123C">VI. Event &amp; Reaction Layer (planned)</text>
+        <text x="60" y="456" class="lyr-sub">Kafka/Redpanda · entity-cdc-event-producer · entity-event-transformer · entity-event-consumer</text>
+        <rect x="595" y="426" width="75" height="18" rx="9" fill="#FFE4E6"/>
+        <text x="632" y="439" text-anchor="middle" class="lyr-badge" fill="#BE123C">planned</text>
+      </svg>
+    </div>
+
+    <h2 id="current-topology">Current (Implemented) Topology</h2>
+    <p>In its current form, the system operates as a synchronous request-response stack with three active service tiers plus Redis and OPA as co-processes:</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:720px;font-family:Inter,sans-serif">
+        <defs>
+          <marker id="arr2" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#6B7280"/>
+          </marker>
+        </defs>
+        <!-- Client -->
+        <rect x="230" y="16" width="260" height="48" rx="8" fill="#EEF2FF" stroke="#818CF8" stroke-width="1.5"/>
+        <text x="360" y="37" text-anchor="middle" font-weight="700" font-size="13" fill="#4338CA">Browser / API Client</text>
+        <text x="360" y="54" text-anchor="middle" font-size="10" fill="#818CF8">tarcinapp-base-gui · any HTTP client</text>
+
+        <line x1="360" y1="64" x2="360" y2="90" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <!-- Gateway -->
+        <rect x="160" y="90" width="400" height="64" rx="8" fill="#FDF4FF" stroke="#A855F7" stroke-width="1.5"/>
+        <text x="360" y="115" text-anchor="middle" font-weight="700" font-size="13" fill="#7E22CE">entity-persistence-gateway</text>
+        <text x="360" y="130" text-anchor="middle" font-size="10" fill="#9333EA">Spring Cloud Gateway · Java 21 · :8081</text>
+        <text x="360" y="145" text-anchor="middle" font-size="10" fill="#A855F7">Auth · Authz · Field Masking · Domain Projection · OAS Gen</text>
+        <!-- OPA side -->
+        <rect x="570" y="108" width="120" height="46" rx="8" fill="#F3E8FF" stroke="#A855F7" stroke-width="1" stroke-dasharray="4,2"/>
+        <text x="630" y="129" text-anchor="middle" font-weight="600" font-size="12" fill="#7E22CE">OPA :8181</text>
+        <text x="630" y="145" text-anchor="middle" font-size="10" fill="#9333EA">gateway-policies</text>
+        <line x1="560" y1="131" x2="572" y2="131" stroke="#A855F7" stroke-width="1.5" stroke-dasharray="4,2"/>
+        <!-- Redis side -->
+        <rect x="30" y="108" width="120" height="46" rx="8" fill="#FEF9C3" stroke="#EAB308" stroke-width="1" stroke-dasharray="4,2"/>
+        <text x="90" y="129" text-anchor="middle" font-weight="600" font-size="12" fill="#854D0E">Redis :6379</text>
+        <text x="90" y="145" text-anchor="middle" font-size="10" fill="#854D0E">locks · cache</text>
+        <line x1="160" y1="131" x2="150" y2="131" stroke="#EAB308" stroke-width="1.5" stroke-dasharray="4,2"/>
+
+        <line x1="360" y1="154" x2="360" y2="180" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <!-- Orchestrator -->
+        <rect x="200" y="180" width="320" height="52" rx="8" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1" stroke-dasharray="5,3"/>
+        <text x="360" y="203" text-anchor="middle" font-weight="700" font-size="13" fill="#92400E">universal-orchestrator (optional)</text>
+        <text x="360" y="220" text-anchor="middle" font-size="10" fill="#D97706">Quarkus + Camel · :8082 · PreProcessor / PostProcessor</text>
+
+        <line x1="360" y1="232" x2="360" y2="258" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <!-- EPS -->
+        <rect x="200" y="258" width="320" height="52" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+        <text x="360" y="281" text-anchor="middle" font-weight="700" font-size="13" fill="#1D4ED8">entity-persistence-service</text>
+        <text x="360" y="298" text-anchor="middle" font-size="10" fill="#3B82F6">LoopBack 4 · Node.js · :3000 · 67 REST endpoints</text>
+
+        <line x1="360" y1="310" x2="360" y2="326" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <rect x="300" y="326" width="120" height="10" rx="5" fill="#6EE7B7"/>
+        <text x="360" y="333" text-anchor="middle" font-size="9" fill="#065F46">MongoDB</text>
+      </svg>
+    </div>
+
+    <h2 id="target-topology">Target Topology (Full Vision)</h2>
+    <p>The full architecture adds an ingress proxy, search gateway, event pipeline, SSR engine, and S3 storage — turning the suite into a complete SaaS platform foundation.</p>
+    <div class="callout callout-warn">
+      <p><strong>In Progress:</strong> Components marked <em>planned</em> do not have repositories yet. The current implementation covers Layers III, IV (partial), and V.</p>
+    </div>
+
+    <table>
+      <thead><tr><th>Planned Component</th><th>Role</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>tarcinapp-ingress-proxy</code></td><td>Nginx config wrapper for edge routing and TLS</td><td>Planned</td></tr>
+        <tr><td><code>tarcinapp-ui-server</code></td><td>SSR engine for dynamic SaaS frontends</td><td>Planned</td></tr>
+        <tr><td><code>entity-search-gateway</code></td><td>Read-only search proxy over Meilisearch</td><td>Planned</td></tr>
+        <tr><td><code>entity-persistence-bff-orchestrator</code></td><td>Page-aggregator BFF for SSR UIs</td><td>Planned</td></tr>
+        <tr><td><code>entity-search-indexer</code></td><td>Camel Quarkus CDC → Meilisearch writer</td><td>Planned</td></tr>
+        <tr><td><code>entity-s3-orchestrator</code></td><td>S3-compatible object storage integration</td><td>Planned</td></tr>
+        <tr><td><code>entity-cdc-event-producer</code></td><td>Debezium CDC connector</td><td>Planned</td></tr>
+        <tr><td><code>entity-event-transformer</code></td><td>Camel domain event transformer</td><td>Planned</td></tr>
+        <tr><td><code>entity-event-consumer</code></td><td>Reactive event consumer</td><td>Planned</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="layer-client">Layer I: Client</h2>
+    <p><strong>Implemented:</strong> <code>tarcinapp-base-gui</code> — React 18 · Vite · Tailwind CSS. A domain-agnostic admin UI that builds its entire interface from the Gateway's live OpenAPI spec. No hardcoded domain knowledge. Connecting to a different Gateway URL produces a completely different UI for a completely different business domain.</p>
+    <p><strong>Planned:</strong> <code>tarcinapp-ui-server</code> — a Server-Side Rendering engine for public-facing SaaS frontends.</p>
+
+    <h2 id="layer-idm">Layer II: Identity Management</h2>
+    <p>Keycloak handles all authentication concerns: OAuth2/OIDC flows, JWT issuance, user management, and role assignment. It is deployed as a standard infrastructure component — no custom repository. The Gateway validates JWTs issued by Keycloak (and optionally multiple other issuers) on every request.</p>
+    <p>JWT claims carry user ID, roles, and email-verification status. The Gateway extracts these and passes them to OPA for every authorization decision.</p>
+
+    <h2 id="layer-gateway">Layer III: Gateway &amp; Security</h2>
+    <p>The most feature-rich layer. <code>entity-persistence-gateway</code> is the system's single entry point and its Policy Enforcement Point. Every request passes through it. Nothing reaches the data layer without passing all gateway checks.</p>
+    <p>Key responsibilities:</p>
+    <ul>
+      <li><strong>JWT Authentication</strong> — validates token signature, issuer, expiry; rejects unsigned or expired tokens with 401.</li>
+      <li><strong>OPA Authorization</strong> — two-pass check: (1) may the caller perform this operation at all? (2) which fields are readable/writable?</li>
+      <li><strong>Field Masking</strong> — strips fields from responses that the caller's role cannot see. Adds managed fields (<code>_createdBy</code>, <code>_ownerUsers</code>, etc.) from JWT claims.</li>
+      <li><strong>Domain Projection</strong> — turns <code>/entities</code> into <code>/books</code> by rewriting paths, injecting <code>_kind</code>, and applying per-kind JSON Schema validation.</li>
+      <li><strong>Dynamic OpenAPI Generation</strong> — generates a personalized API spec per caller. Fields the caller cannot access are absent from the spec. This drives the GUI.</li>
+      <li><strong>Rate Limiting</strong> — per-kind sliding-window rate limiter backed by Redis.</li>
+      <li><strong>Distributed Locking</strong> — acquires Redis locks per-record for all write operations to prevent lost updates.</li>
+      <li><strong>Response Caching</strong> — configurable local cache backed by Redis.</li>
+    </ul>
+
+    <h2 id="layer-orch">Layer IV: Orchestration</h2>
+    <p><code>entity-persistence-universal-orchestrator</code> is an optional, thin middleware between the Gateway and the Data layer. It exposes Pre and PostProcessor hooks for every endpoint — giving you a clean integration point for custom business logic without modifying any core component.</p>
+    <p>Use the orchestrator for: data enrichment from external services, cross-record quota enforcement, async side effects (publishing events), and response aggregation. See the <a href="concepts.html#orchestration">Orchestration Layer concept</a> for the decision guide: Gateway filter vs. OPA policy vs. Orchestrator.</p>
+
+    <h2 id="layer-data">Layer V: Data, Search &amp; Storage</h2>
+    <p><code>entity-persistence-service</code> is intentionally simple: it stores and retrieves JSON records from MongoDB. It has 67 REST endpoints covering all five record types, hierarchies, traversals, and lookups — but zero domain intelligence. All business constraints come from the Gateway layer.</p>
+    <p>Redis provides distributed locking (driven by the Gateway), rate limiting state, and local response caching. Meilisearch (planned: <code>entity-search-gateway</code>) will provide full-text search.</p>
+
+    <h2 id="layer-events">Layer VI: Event &amp; Reaction Layer (Planned)</h2>
+    <p>An event backbone based on Kafka/Redpanda and a suite of Camel Quarkus services for CDC event production, transformation, and consumption. This layer enables async workflows, audit streams, and real-time derived data — but has no existing repositories yet.</p>
+
+    <h2 id="request-flow">Request Flow</h2>
+    <p>A typical authenticated read request travels through these stages:</p>
+    <ol>
+      <li>Client sends <code>GET /api/v1/books?q=my&amp;limit=10</code> with Bearer token.</li>
+      <li><strong>Gateway</strong> validates JWT signature and expiry → extracts <code>sub</code>, roles, groups.</li>
+      <li><strong>Gateway</strong> calls OPA: "May this user GET from /books?" → OPA returns allow/deny + injected query constraints (<code>sets</code>, <code>filter[where]</code>).</li>
+      <li><strong>Gateway</strong> rewrites path: <code>/books</code> → <code>/entities?filter[where][_kind]=book</code>. Appends OPA-injected visibility scoping.</li>
+      <li><strong>Gateway</strong> checks Redis cache. If cached, returns immediately.</li>
+      <li>(If orchestrator configured) <strong>Orchestrator PreProcessor</strong> may modify the request further.</li>
+      <li><strong>EPS</strong> executes query against MongoDB. Returns raw results.</li>
+      <li>(If orchestrator configured) <strong>Orchestrator PostProcessor</strong> may enrich or transform the response.</li>
+      <li><strong>Gateway</strong> field-masks the response: strips any fields OPA said the caller cannot read.</li>
+      <li><strong>Gateway</strong> caches the masked response in Redis (if caching enabled).</li>
+      <li>Response returned to client with only the fields they are authorized to see.</li>
+    </ol>
+
+    <h2 id="gateway-transforms">Gateway Transforms: The Domain Projection Magic</h2>
+    <p>Domain Projection is how the Gateway turns a generic <code>/entities</code> API into a domain-specific <code>/books</code> API with four transformation steps:</p>
+    <table>
+      <thead><tr><th>Step</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Path Rewriting</td><td><code>GET /books</code> → <code>GET /entities</code></td></tr>
+        <tr><td><code>_kind</code> Injection</td><td>On write: adds <code>"_kind":"book"</code> to request body. On read: adds <code>filter[where][_kind]=book</code> to query.</td></tr>
+        <tr><td>Schema Validation</td><td>Applies the per-kind JSON Schema to the request body before forwarding.</td></tr>
+        <tr><td>OAS Pruning</td><td>Removes the generic <code>/entities</code> routes from the spec if domain-only mode is enabled.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="cross-cutting">Cross-Cutting Concerns</h2>
+    <table>
+      <thead><tr><th>Concern</th><th>Mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>Request ID Propagation</td><td>Gateway generates <code>X-Request-ID</code> on every inbound request if absent; propagates it to all downstream services.</td></tr>
+        <tr><td>Distributed Tracing</td><td>OpenTelemetry W3C trace context propagated across Gateway → Orchestrator → EPS. Exportable to any OTLP-compatible backend.</td></tr>
+        <tr><td>Observability</td><td>Prometheus metrics endpoint (<code>/actuator/prometheus</code>) on the Gateway. EPS has structured JSON logs. Grafana dashboards possible.</td></tr>
+        <tr><td>Application Shortcode</td><td><code>app.shortcode</code> (e.g. <code>myapp</code>) is injected into logs, metrics, and OpenTelemetry resource attributes for multi-tenant observability.</td></tr>
+        <tr><td>Non-blocking I/O</td><td>Spring Cloud Gateway (reactive Netty), LoopBack 4 (Node.js async), Quarkus (Vert.x) — all non-blocking throughout the stack.</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+  </div><!-- /.doc-main -->
+</div><!-- /.doc-layout -->
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark">T</span>
+      <span class="footer-name">Tarcinapp Suite</span>
+      <span class="footer-tagline">Backend-as-configuration for SaaS builders</span>
+    </div>
+    <nav class="footer-nav">
+      <div class="footer-col">
+        <span class="footer-col-title">Documentation</span>
+        <a href="architecture.html">Architecture</a>
+        <a href="concepts.html">Concepts</a>
+        <a href="components.html">Components</a>
+        <a href="configuration.html">Configuration</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">Resources</span>
+        <a href="getting-started.html">Getting Started</a>
+        <a href="examples.html">Examples</a>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">Tarcinapp Suite is actively developed. Docs evolve with the suite.</div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

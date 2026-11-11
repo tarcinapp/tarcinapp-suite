@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Getting Started — Tarcinapp Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-mark">T</span>
+      <span class="logo-text">arcinapp<span class="logo-suite"> Suite</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="concepts.html">Concepts</a></li>
+      <li><a href="components.html">Components</a></li>
+      <li class="has-dropdown">
+        <a href="resources.html">Resources ▾</a>
+        <ul class="dropdown">
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="examples.html">Examples</a></li>
+          <li><a href="configuration.html">Configuration Reference</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="https://github.com/tarcinapp" class="btn-github" target="_blank" rel="noopener">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-layout">
+  <aside class="doc-sidebar">
+    <span class="doc-sidebar-title">Setup</span>
+    <a href="#prereqs">Prerequisites</a>
+    <a href="#minimal-topology">Minimal Topology</a>
+    <a href="#step1">Step 1: Infrastructure</a>
+    <a href="#step2">Step 2: Data Service (EPS)</a>
+    <a href="#step3">Step 3: Gateway</a>
+    <a href="#step4">Step 4: Admin UI (GUI)</a>
+    <span class="doc-sidebar-title">Verify</span>
+    <a href="#generate-jwt">Generate a Dev JWT</a>
+    <a href="#first-request">First API Request</a>
+    <a href="#ports">Port Reference</a>
+    <a href="#gotchas">Common Gotchas</a>
+  </aside>
+
+  <div class="doc-main">
+    <div class="page-header">
+      <div class="page-breadcrumb"><a href="index.html">Home</a> / <a href="resources.html">Resources</a> / Getting Started</div>
+          <h1>Getting Started</h1>
+          <p>Run a full Tarcinapp stack locally in minutes. No Kubernetes required to start.</p>
+    </div>
+
+  <main class="doc-content prose">
+
+    <h2 id="prereqs">Prerequisites</h2>
+    <ul>
+      <li><strong>Docker &amp; Docker Compose</strong> — for the infrastructure stack (MongoDB, Redis, OPA)</li>
+      <li><strong>Java 21</strong> (or compatible JDK) — for the gateway</li>
+      <li><strong>Node.js 20+</strong> — for EPS and the GUI</li>
+      <li><strong>Git</strong> — to clone the repositories</li>
+    </ul>
+    <div class="callout">
+      <p><strong>Minimum viable setup:</strong> Infrastructure (MongoDB + Redis + OPA) + EPS + Gateway. The orchestrator and GUI are optional for initial exploration.</p>
+    </div>
+
+    <h2 id="minimal-topology">Minimal Topology</h2>
+    <p>This guide sets up the minimum stack to make authenticated API calls:</p>
+    <pre><code>Browser / curl
+  └── entity-persistence-gateway  :8081
+        ↔ OPA                      :8181
+        ↔ Redis                    :6379
+        └── entity-persistence-service  :3000
+              └── MongoDB          :27017</code></pre>
+
+    <div class="steps">
+      <!-- Step 1 -->
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3 id="step1">Start Infrastructure with Docker Compose</h3>
+          <p>Clone the gateway repo (it contains a development docker-compose file) or create the following <code>docker-compose.infra.yml</code>:</p>
+          <pre><code>version: "3.9"
+services:
+  mongodb:
+    image: mongo:7
+    ports: ["27017:27017"]
+    volumes: [mongo_data:/data/db]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  opa:
+    image: openpolicyagent/opa:latest
+    ports: ["8181:8181"]
+    command: ["run", "--server", "--addr", "0.0.0.0:8181", "/policies"]
+    volumes:
+      - ./policies:/policies:ro
+
+volumes:
+  mongo_data:</code></pre>
+          <p>The <code>./policies</code> directory must contain the Rego files from <code>entity-persistence-gateway-policies</code>:</p>
+          <pre><code>git clone https://github.com/tarcinapp/entity-persistence-gateway-policies.git
+# Copy the policies/ directory into your infra compose path</code></pre>
+          <pre><code>docker compose -f docker-compose.infra.yml up -d</code></pre>
+          <p>Verify OPA loaded policies correctly:</p>
+          <pre><code>curl http://localhost:8181/v1/policies</code></pre>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3 id="step2">Start entity-persistence-service (EPS)</h3>
+          <pre><code>git clone https://github.com/tarcinapp/entity-persistence-service.git
+cd entity-persistence-service
+npm install</code></pre>
+          <p>Create a <code>.env</code> file in the EPS directory:</p>
+          <pre><code>NODE_ENV=development
+HOST=0.0.0.0
+PORT=3000
+MONGODB_HOST=localhost
+MONGODB_PORT=27017
+MONGODB_DATABASE=tarcinapp
+
+# Allow these kind values (comma-separated)
+ENTITY_KINDS=book,author,chapter
+LIST_KINDS=shelf
+ENTITY_REACTION_KINDS=review,rating,bookmark
+
+# Auto-approve records (set _validFromDateTime automatically)
+AUTOAPPROVE_ENTITY=true
+AUTOAPPROVE_LIST=true
+AUTOAPPROVE_ENTITY_REACTION=true
+
+# Default visibility
+VISIBILITY_ENTITY=public</code></pre>
+          <pre><code>npm start</code></pre>
+          <p>Verify:</p>
+          <pre><code>curl http://localhost:3000/ping
+# Expected: {"greeting":"Hello from LoopBack"}</code></pre>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3 id="step3">Start entity-persistence-gateway</h3>
+          <pre><code>git clone https://github.com/tarcinapp/entity-persistence-gateway.git
+cd entity-persistence-gateway</code></pre>
+          <p>Create <code>src/main/resources/application-dev.yaml</code>:</p>
+          <pre><code>app:
+  name: my-books-app
+  shortcode: books
+  base-uri: /api/v1
+
+  # Backend and OPA locations
+  backend:
+    host: http://localhost:3000
+  opa:
+    host: http://localhost:8181
+
+  # JWT: use a test RS256 key pair or disable auth for dev
+  auth:
+    jwt:
+      issuer: http://localhost
+      jwk-set-uri: http://localhost/.well-known/jwks.json
+
+  # Expose domain-specific routes for books
+  kindAliasPaths:
+    - alias: books
+      name: book
+      schema: '{"type":"object","required":["author"],"properties":{"author":{"type":"string"}}}'
+    - alias: shelves
+      name: shelf
+    - alias: reviews
+      name: review</code></pre>
+          <pre><code>./mvnw spring-boot:run -Dspring-boot.run.profiles=dev</code></pre>
+          <p>Verify the gateway is running:</p>
+          <pre><code>curl http://localhost:8081/api/v1/openapi.json | head -c 200</code></pre>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3 id="step4">Start tarcinapp-base-gui (optional)</h3>
+          <pre><code>git clone https://github.com/tarcinapp/tarcinapp-base-gui.git
+cd tarcinapp-base-gui
+npm install
+npm run dev</code></pre>
+          <p>Open <a href="http://localhost:5173" target="_blank" rel="noopener">http://localhost:5173</a>. On the setup screen, enter the gateway URL <code>http://localhost:8081</code> and a valid Bearer token. The UI will auto-build from the gateway's OpenAPI spec.</p>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="generate-jwt">Generate a Dev JWT</h2>
+    <p>For local development without Keycloak, generate a test RS256 token:</p>
+    <pre><code># Step 1: Generate a test key pair
+openssl genrsa -out test_private.pem 2048
+openssl rsa -in test_private.pem -pubout -out test_public.pem
+
+# Step 2: Create a JWT payload (save as payload.json)
+{
+  "sub": "dev-user-001",
+  "iss": "http://localhost",
+  "aud": "my-books-app",
+  "exp": 9999999999,
+  "email": "dev@example.com",
+  "email_verified": true,
+  "resource_access": {
+    "my-books-app": {
+      "roles": ["tarcinapp.records.entity.admin"]
+    }
+  }
+}</code></pre>
+    <pre><code># Step 3: Sign with a JWT tool (e.g. node-jose, python-jwt, or jwt.io)
+# Then use the resulting token:
+export TOKEN="eyJhbGci..."
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/api/v1/books</code></pre>
+
+    <div class="callout callout-warn">
+      <p><strong>Dev only:</strong> You must configure the gateway's <code>app.auth.jwt.jwk-set-uri</code> to serve your test public key, or configure a static public key in the gateway YAML. See the gateway README for dev JWT configuration options.</p>
+    </div>
+
+    <h2 id="first-request">First API Request</h2>
+    <p>With infrastructure, EPS, and the gateway running, make your first domain API call:</p>
+    <pre><code># Create a book
+curl -X POST http://localhost:8081/api/v1/books \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "_name": "The Great Gatsby",
+    "author": "F. Scott Fitzgerald"
+  }'
+
+# Expected: 201 Created with the full record including managed fields:
+# {
+#   "_id": "uuid-here",
+#   "_name": "The Great Gatsby",
+#   "_kind": "book",          ← injected by gateway
+#   "_visibility": "public",  ← from VISIBILITY_ENTITY config
+#   "_createdBy": "dev-user-001",  ← from JWT sub
+#   "_validFromDateTime": "2024-...",  ← from AUTOAPPROVE_ENTITY
+#   "author": "F. Scott Fitzgerald"
+# }</code></pre>
+    <pre><code># List books
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8081/api/v1/books
+
+# With pagination and search
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8081/api/v1/books?limit=10&skip=0&s=gatsby"</code></pre>
+
+    <h2 id="ports">Port Reference</h2>
+    <table>
+      <thead><tr><th>Service</th><th>Default Port</th></tr></thead>
+      <tbody>
+        <tr><td>entity-persistence-gateway</td><td>8081</td></tr>
+        <tr><td>entity-persistence-service</td><td>3000</td></tr>
+        <tr><td>universal-orchestrator (optional)</td><td>8082</td></tr>
+        <tr><td>tarcinapp-base-gui (dev)</td><td>5173</td></tr>
+        <tr><td>OPA</td><td>8181</td></tr>
+        <tr><td>MongoDB</td><td>27017</td></tr>
+        <tr><td>Redis</td><td>6379</td></tr>
+        <tr><td>Keycloak (if used)</td><td>8080</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="gotchas">Common Gotchas</h2>
+
+    <h3>1. JWT <code>iss</code> mismatch → 401</h3>
+    <p>The <code>iss</code> claim in your JWT must exactly match the <code>app.auth.jwt.issuer</code> value in the gateway config. Even a trailing slash difference will cause all requests to fail with 401.</p>
+
+    <h3>2. OPA returns 500 → policies not mounted</h3>
+    <p>If the gateway logs show OPA returning 500, the Rego policies were not loaded. Verify:</p>
+    <pre><code>curl http://localhost:8181/v1/policies
+# Should list loaded policy IDs from entity-persistence-gateway-policies</code></pre>
+
+    <h3>3. Record not appearing in GET → auto-approve not set</h3>
+    <p>If you create a record and it does not appear in <code>GET /books</code>, the record is in <em>pending</em> state. Set <code>AUTOAPPROVE_ENTITY=true</code> on EPS and restart, or manually approve by PATCHing <code>_validFromDateTime</code> to a past datetime (requires an admin token).</p>
+
+    <h3>4. Gateway 503 on startup → EPS not ready</h3>
+    <p>The gateway performs a startup health check against EPS. Start EPS before the gateway, or configure a startup delay / retry in the gateway settings.</p>
+
+    <h3>5. 429 Too Many Requests → rate limiter</h3>
+    <p>Default rate limits are intentionally conservative for production. For local dev, increase them in the gateway config:</p>
+    <pre><code>app:
+  inbound:
+    rateLimiter:
+      replenishRate: 100
+      burstCapacity: 200</code></pre>
+
+    <h3>6. <code>_kind</code> value rejected → not in EPS allowed list</h3>
+    <p>If you configure a kind alias in the gateway but see <code>422 INVALID-KIND</code> on POST, the kind value is not in EPS's <code>ENTITY_KINDS</code> (or equivalent) environment variable. Add it and restart EPS.</p>
+
+  </main>
+  </div><!-- /.doc-main -->
+</div><!-- /.doc-layout -->
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark">T</span>
+      <span class="footer-name">Tarcinapp Suite</span>
+      <span class="footer-tagline">Backend-as-configuration for SaaS builders</span>
+    </div>
+    <nav class="footer-nav">
+      <div class="footer-col">
+        <span class="footer-col-title">Documentation</span>
+        <a href="architecture.html">Architecture</a>
+        <a href="concepts.html">Concepts</a>
+        <a href="components.html">Components</a>
+        <a href="configuration.html">Configuration</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">Resources</span>
+        <a href="getting-started.html">Getting Started</a>
+        <a href="examples.html">Examples</a>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">Tarcinapp Suite is actively developed. Docs evolve with the suite.</div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>
