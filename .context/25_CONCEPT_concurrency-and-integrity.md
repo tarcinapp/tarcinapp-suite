@@ -74,19 +74,21 @@ The suite applies mitigations at multiple layers. Each layer handles a different
 
 > **EPBO interaction:** Because `entity-persistence-base-orchestrator` (EPBO) sits between the Gateway and EPC in the chain (`EPG → EPBO → EPC → EPS`), **all computed fields are fully resolved before EPC sees the payload**. In particular, `_slug` is always present in payloads arriving at EPC (computed by EPBO from `_name`). EPC's lock key interpolation therefore finds all required field values directly in the payload and never needs to derive computed fields itself. This eliminates the previous design concern where EPC might attempt to build a lock key referencing `${_slug}` on a payload that contained only `_name`.
 
-**Lock key examples:**
+**Uniqueness lock key example:**
 
 ```
 # Uniqueness rule: where[_kind]=${_kind}&where[_slug]=${_slug}&set[owners][userIds]=${_ownerUsers}
 BOOKS:epc:lock:uniqueness:entity:book:the-great-gatsby:user-123
-
-# Limit rule: {"scope":"where[_ownerUsers]=${_ownerUsers}&where[_kind]=book","limit":10}
-BOOKS:epc:lock:limit:entity:a3f9c2:user-123
 ```
 
-**What it protects:** Two requests that would collide on a configured uniqueness rule or a per-user/per-kind limit scope are given the same lock key and serialised. Eliminates the TOCTOU race for the common cases: per-user uniqueness, per-kind uniqueness, per-user limits.
+**Limit lock key example (enforceSerialisation: true required):**
 
-**What it does NOT protect:** See [Remaining Limitations](#remaining-limitations) below.
+```
+# Limit rule: {"scope":"where[_kind]=${_kind}&set[owners][userIds]=${_ownerUsers}","limit":10,"enforceSerialisation":true}
+BOOKS:epc:lock:limit:entity:a3f9c2:book:user-123
+```
+
+**What it protects:** Two requests that would collide on a configured uniqueness rule are always serialised. For record-limit rules, serialisation is opt-in via `enforceSerialisation: true` — see [Remaining Limitations](#remaining-limitations).
 
 **Reference:** [`15_COMPONENT_entity-persistence-cache.md`](./15_COMPONENT_entity-persistence-cache.md)
 
@@ -115,18 +117,32 @@ Currently EPS does not translate `E11000` errors to HTTP 409. This is a known ga
 
 ## Remaining Limitations
 
-### 1. Wide-scope record limits require opt-in serialisation
+### 1. Record-limit serialisation is always opt-in
 
-For record-limit rules whose scope contains **no interpolatable fields** (e.g. global cap `""`, or static kind cap `where[_kind]=book`), the lock key is identical for every create request regardless of who makes it. Acquiring that lock would serialise the entire collection globally — unacceptable by default under normal multi-tenant throughput, but correct and desirable for hard licence/seat caps or low-volume hard quotas.
+EPC **never acquires a lock for a record-limit rule unless `enforceSerialisation: true` is explicitly set** on that rule. This applies universally — whether the scope has interpolatable `${…}` fields or not.
 
-**EPC behaviour is opt-in, controlled by `enforceSerialisation` on the limit rule (configured in EPS):**
+**Why:** Any limit scope whose lock key is shared across multiple independent users or tenants (e.g. `where[_kind]=${_kind}&set[actives]` — same `_kind` for every user) would serialise all writes of that kind globally if a lock were acquired unconditionally. That is unacceptable by default in a multi-tenant system. The operator must opt in deliberately.
 
-- `"enforceSerialisation": true` — EPC acquires a globally scoped lock for that rule, making the limit fully serialised and race-free.
-- `"enforceSerialisation": false` (default) — no lock is acquired for wide-scope rules; EPS's own count check is the sole gate (best-effort).
+**EPC behaviour:**
 
-When `enforceSerialisation` is absent or `false`, the practical overshoot for a global limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable.
+- `"enforceSerialisation": true` — EPC acquires a lock keyed on the interpolated scope dimensions. All requests whose interpolated values produce the same lock key are serialised.
+- `"enforceSerialisation": false` (default, or absent) — no lock is acquired; EPS's own count check is the sole gate (best-effort).
 
-> **EPBO interaction:** Because `entity-persistence-base-orchestrator` (EPBO) sits before EPC in the chain and resolves computed fields (e.g. `_slug` from `_name`) before the request reaches EPC, wide-scope rules that reference computed fields in their scope — while uncommon — also benefit: all field values are present in the payload when EPC builds lock keys, whether `enforceSerialisation` is set or not.
+When `enforceSerialisation` is absent or `false`, the practical overshoot for a limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable.
+
+**Scope granularity and serialisation boundary:** The lock key is built only from the `${…}` interpolatable dimensions. `set[actives]`, `set[publics]`, and similar time/visibility predicates contribute nothing to the lock key — they are EPS-side counting filters only. If the limit rule is "no more than N active books per user", the scope must include `${_ownerUsers}` to give EPC a per-user lock dimension:
+
+```
+# Correct: per-user active-book limit with serialisation
+{"scope": "where[_kind]=${_kind}&set[actives]&set[owners][userIds]=${_ownerUsers}", "limit": 5, "enforceSerialisation": true}
+# → lock key: books:epc:lock:limit:entity:{hash}:book:user-123
+
+# Coarser: all-users kind-level limit (serialises globally within _kind)
+{"scope": "where[_kind]=${_kind}&set[actives]", "limit": 500, "enforceSerialisation": true}
+# → lock key: books:epc:lock:limit:entity:{hash}:book
+```
+
+> **EPBO interaction:** Because `entity-persistence-base-orchestrator` (EPBO) sits before EPC in the chain and resolves computed fields (e.g. `_slug` from `_name`) before the request reaches EPC, all field values referenced by `${…}` placeholders are present in the payload when EPC builds lock keys.
 
 ### 2. EPC is an optional component
 
@@ -146,11 +162,10 @@ Idempotency is a client responsibility. Callers supply an `X-Idempotency-Key` re
 
 | Feature | Layer 1 (GW hash/idem lock) | Layer 2 (GW record lock) | Layer 3 (EPC scope lock) | Layer 4 (EPS check) | Layer 5 (MongoDB index) |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| Identical-payload duplicate create | ✅ | — | ✅ | ✅ | ✅ (with index) |
-| Different-payload same-key duplicate create | ⚠️ partial | — | ✅ (EPC required) | ✅ | ✅ (with index) |
+| Identical-payload duplicate create | ✅ | — | ✅ `enforceSerialisation:true` · ⚠️ best-effort otherwise | ✅ | ✅ (with index) |
+| Different-payload same-key duplicate create | ⚠️ partial | — | ✅ `enforceSerialisation:true` (EPC required) | ✅ | ✅ (with index) |
 | Concurrent updates to same record | — | ✅ | — | — | — |
-| Per-user / per-kind record limit race | — | — | ✅ (EPC required) | ✅ (best-effort) | — |
-| Global / wide-scope record limit race | — | — | ✅ `enforceSerialisation:true` · ⚠️ best-effort otherwise | ✅ (best-effort) | — |
+| Any record limit race (per-user or global) | — | — | ✅ `enforceSerialisation:true` · ⚠️ best-effort otherwise | ✅ (best-effort) | — |
 | Client-supplied idempotency key collision | ✅ (header lock) | — | — | — | — |
 
 Legend: ✅ Covered · ⚠️ Partial · ❌ Not covered by design · — Not applicable

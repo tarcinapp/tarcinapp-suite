@@ -124,6 +124,16 @@ policies/
 │           ├── updateReactionsByListId/
 │           └── deleteReactionsByListId/
 │
+│       NOTE: exec/ and calc/ sub-folders exist under each resource type
+│       (e.g. entities/exec/, entities/calc/) for framework-shipped task policies.
+│       Product-defined task policies live in extension/ — see below.
+│
+├── extension/                          ← Product-defined task policies (OPA Extension Pattern)
+│   ├── README.md                       ← full pattern documentation
+│   └── auth/routes/entities/
+│       ├── exec/_skeleton/policy.rego  ← copy-and-fill skeleton for exec tasks
+│       └── calc/_skeleton/policy.rego  ← copy-and-fill skeleton for calc tasks
+│
 ├── fields/                             ← Central field-filtering engine
 │   ├── data.rego                       ← Authoritative forbidden field definitions per role
 │   ├── mapping.rego                    ← Key → dot-notation path mapping
@@ -622,6 +632,77 @@ payload_contains_any_field(fields) if {
 There is no global registry file. The Gateway already knows the route-to-policy mapping (configured in the Gateway's `app.routes` config). After deploying the new policy file to OPA, the Gateway can begin querying it. If this is a brand-new route, the Gateway's route configuration must also be updated to include the new `routeId`.
 
 **Step 4 — Write tests (required). See Policy Testing section.**
+
+---
+
+## OPA Policy Extension Pattern
+
+### What it is
+
+The **OPA Policy Extension Pattern** is how product teams add or override any route authorization policy without modifying any file in the framework directory.
+
+It relies on two OPA behaviours:
+
+1. **Default deny by undefined** — If no `.rego` file declares a package that the Gateway queries, OPA returns `undefined`. The Gateway maps `undefined` to `403 Forbidden`. Any policy not yet written is automatically safe with no action required.
+
+2. **Package merging across load paths** — OPA merges all rules from every file that shares the same `package` declaration, regardless of which directory each file lives in. A product team adds files in `extension/`; OPA merges them transparently with all framework packages.
+
+### Directory contract
+
+`policies/extension/` mirrors the sub-path structure of `policies/`. A file at `extension/auth/routes/entities/exec/merge/policy.rego` contributes to the same OPA package as if it were at `auth/routes/entities/exec/merge/policy.rego`. The framework ships skeleton files to seed the structure:
+
+```
+policies/extension/
+├── README.md                                      ← full pattern documentation
+└── auth/routes/
+    ├── entities/
+    │   ├── exec/_skeleton/policy.rego             ← copy-and-fill for exec tasks
+    │   └── calc/_skeleton/policy.rego             ← copy-and-fill for calc tasks
+    ├── lists/
+    │   ├── exec/_skeleton/policy.rego
+    │   └── calc/_skeleton/policy.rego
+    └── {any resource type}/
+        └── {any operation}/
+            └── policy.rego                        ← override or extend any framework policy
+```
+
+A product adds its policies under `policies/extension/`, for example:
+
+```
+policies/extension/auth/routes/entities/exec/
+└── merge/
+    ├── policy.rego       ← package policies.auth.routes.entities.exec.merge.policy
+    ├── policy_test.rego
+    └── README.md
+```
+
+Because `extension/` lives inside `policies/`, a single OPA load path covers everything:
+
+```bash
+# Development
+opa run --watch --server ./policies
+
+# Docker / production
+CMD ["run", "--server", "--addr", "0.0.0.0:8181", "/policies"]
+```
+
+### Policy package convention
+
+| Extension policy | Package | File path under `policies/extension/` |
+|:---|:---|:---|
+| `exec merge` on entities | `policies.auth.routes.entities.exec.merge.policy` | `auth/routes/entities/exec/merge/policy.rego` |
+| `calc average-amount` on entities | `policies.auth.routes.entities.calc.average-amount.policy` | `auth/routes/entities/calc/average-amount/policy.rego` |
+| `exec publish` on lists | `policies.auth.routes.lists.exec.publish.policy` | `auth/routes/lists/exec/publish/policy.rego` |
+| override `createEntity` on entities | `policies.auth.routes.entities.createEntity.policy` | `auth/routes/entities/createEntity/policy.rego` |
+
+### Safety properties
+
+| Scenario | Outcome |
+|:---|:---|
+| Route registered in EPG, no policy file in `extension/` or framework | OPA returns `undefined` → Gateway returns `403` |
+| Policy file exists with only `default allow := false` | All requests denied |
+| Product file declares same package as a framework policy | Rules merged; product's `allow` rules add to (or restrict with `not`) the framework rules |
+| `_skeleton` name never registered as a route in EPG | No risk — skeleton is documentation only |
 
 ---
 

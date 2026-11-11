@@ -324,6 +324,20 @@ Client: `GET /openapi.json` or `GET /openapi.yaml` (with or without Bearer token
 Injects the configured `app.shortcode` value as the `X-App-Shortcode` HTTP header on every proxied request. Enables downstream services (Orchestrator, EPC, EPS) to identify the application deployment context for Redis key namespacing and per-application processor branching. This is the mechanism by which the gateway's single-source-of-truth application identity is propagated to the entire downstream call chain.
 → See [`entity-persistence-gateway/.context/62-FEATURE-APP-SHORTCODE-PROPAGATION.md`](../../entity-persistence-gateway/.context/62-FEATURE-APP-SHORTCODE-PROPAGATION.md)
 
+### 22. Auth Context Header Propagation
+**Filter:** `InjectAuthContextHeaders`
+Serializes the in-process `GatewaySecurityContext` into downstream HTTP headers after JWT validation. Runs after `AuthenticateRequest` and `GenerateRequestId` in every route.
+
+| Header | Value | Presence |
+|:---|:---|:---|
+| `X-User-Id` | JWT `sub` claim | Authenticated requests only |
+| `X-User-Roles` | Comma-separated JWT `roles` claim | Authenticated, non-empty roles only |
+| `X-User-Groups` | Comma-separated JWT `groups` claim | Authenticated, non-empty groups only |
+
+All three headers are **absent** (not set to an empty string) on unauthenticated requests or when `app.auth.rs256PublicKey` is not configured. Downstream processors must always null-check.
+
+**Separation of concerns:** EPG's own managed-field filters (`AddManagedFieldsInCreation`, `AddManagedFieldsInPatch`, `AddManagedFieldsFromOriginalToPayloadInReplace`) read identity directly from `GatewaySecurityContext` — they are fully independent of these headers. The headers exist exclusively for downstream services (EPBO, EPC) that have no access to EPG's in-process exchange attributes.
+
 ---
 
 ## Complete Filter Catalogue
@@ -336,8 +350,9 @@ Injects the configured `app.shortcode` value as the `X-App-Shortcode` HTTP heade
 | `RemoveRequestHeader` | Transformation (built-in) | Strip headers (e.g., `Authorization`) before forwarding |
 | `SetStatus` | Response (built-in) | Hardcode HTTP status (used for disabled utility routes) |
 | `CheckIfRouteEnabled` | Control | Enable/disable routes via tags without redeployment |
-| `AuthenticateRequest` | Security | JWT validation, claim extraction |
+| `AuthenticateRequest` | Security | JWT validation, claim extraction into `GatewaySecurityContext` |
 | `GenerateRequestId` | Tracing | Composite `X-Request-Id` generation |
+| `InjectAuthContextHeaders` | Propagation | Serialize `GatewaySecurityContext` → `X-User-Id`, `X-User-Roles`, `X-User-Groups` headers for downstream services |
 | `FetchForbiddenFields` | Security | Retrieve field-level permission list from OPA |
 | `AuthorizeRequest` | Security | OPA policy decision (allow/deny) |
 | `PreventStringifiedJsonFilter` | Validation | Block stringified-JSON query injection |

@@ -185,13 +185,15 @@ Key points:
 
 Before a request reaches the orchestrator, the Gateway has already processed the JWT and enriched the request with headers that identify the caller. These headers are available on `exchange.getIn()` in every PreProcessor and PostProcessor.
 
-| Header | Source | Description |
-|:---|:---|:---|
-| `X-User-Id` | JWT `sub` claim | The authenticated user's subject identifier (e.g., `user-42`). `null` if unauthenticated (anonymous request). |
-| `X-Request-Id` | Gateway `GenerateRequestId` filter | Composite request ID in the format `APP-{authParty}-{timestamp}-{random}` (e.g., `BOOKS-USER42-20260203091534-A7K9M`). Useful for log correlation. |
-| `X-User-Roles` | JWT `roles` claim | Comma-separated list of role strings extracted from the JWT (e.g., `tarcinapp.admin,tarcinapp.editor`). |
-| `X-User-Groups` | JWT `groups` claim | Comma-separated list of group strings extracted from the JWT. Used by audience-based visibility rules. |
-| `X-App-Shortcode` | Gateway configuration | Short identifier for the application (e.g., `BOOKS`). Matches `app.shortCode` in the Gateway config. Used in request ID generation and multi-tenancy scenarios. |
+| Header | Source | EPG filter | Description |
+|:---|:---|:---|:---|
+| `X-User-Id` | JWT `sub` claim | `InjectAuthContextHeaders` | The authenticated user's subject identifier (e.g., `user-42`). **Absent** (not set to empty) when unauthenticated or when authentication is disabled. |
+| `X-Request-Id` | Gateway-generated | `GenerateRequestId` | Composite request ID in the format `APP-{authParty}-{timestamp}-{random}` (e.g., `BOOKS-USER42-20260203091534-A7K9M`). Useful for log correlation. Always present. |
+| `X-User-Roles` | JWT `roles` claim | `InjectAuthContextHeaders` | Comma-separated list of role strings extracted from the JWT (e.g., `tarcinapp.admin,tarcinapp.editor`). **Absent** when the roles claim is empty or the request is unauthenticated. |
+| `X-User-Groups` | JWT `groups` claim | `InjectAuthContextHeaders` | Comma-separated list of group strings extracted from the JWT. Used by audience-based visibility rules. **Absent** when the groups claim is empty or the request is unauthenticated. |
+| `X-App-Shortcode` | Gateway configuration | `application.yml` default-filter | Short identifier for the application (e.g., `BOOKS`). Matches `app.shortcode` in the Gateway config. Always present. |
+
+> **Implementation note:** `X-User-Id`, `X-User-Roles`, and `X-User-Groups` are injected by the `InjectAuthContextHeaders` filter ([`InjectAuthContextHeaders.java`](../../entity-persistence-gateway/src/main/java/com/tarcinapp/entitypersistencegateway/filters/common/request/InjectAuthContextHeaders.java)), which runs after `GenerateRequestId` in every route. It reads from the in-process `GatewaySecurityContext` (populated by `AuthenticateRequest`) and serializes the values into outbound HTTP headers. EPG's own managed-field filters (`AddManagedFieldsInCreation`, `AddManagedFieldsInPatch`, etc.) continue to read identity directly from `GatewaySecurityContext` — they do not use these headers. The headers exist solely for downstream services (EPBO, EPC) that cannot access EPG's in-process exchange attributes.
 
 These headers are forwarded by the Gateway's proxy step to the orchestrator and are already present on the incoming `Exchange` when your processor runs. They are also forwarded to EPS in the backend call (the orchestrator does not strip them).
 
@@ -203,6 +205,8 @@ String roles     = exchange.getIn().getHeader("X-User-Roles",  String.class);
 String groups    = exchange.getIn().getHeader("X-User-Groups", String.class);
 String appCode   = exchange.getIn().getHeader("X-App-Shortcode", String.class);
 ```
+
+> `X-User-Id`, `X-User-Roles`, and `X-User-Groups` are **absent** on unauthenticated requests or when `app.auth.rs256PublicKey` is not configured. Always null-check before use.
 
 ---
 

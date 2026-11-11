@@ -79,15 +79,19 @@ Runs **after** EPS responds. The EPS response body and status are available.
 
 ### Headers Available in Processors
 
-Before the request reaches the orchestrator, the Gateway injects a set of standard HTTP headers. These are always present when the orchestrator is invoked through the normal Gateway flow. Camel processors access them via `exchange.getIn().getHeader(...)`.
+Before the request reaches the orchestrator, the Gateway injects a set of standard HTTP headers. Camel processors access them via `exchange.getIn().getHeader(...)`.
 
-| Header | Source | Value |
-|:---|:---|:---|
-| `X-User-Id` | JWT `sub` claim | The authenticated user's subject identifier |
-| `X-Request-Id` | Gateway-generated | A unique ID for this request (useful for correlation logging) |
-| `X-User-Roles` | JWT roles claim | Comma-separated list of role names (e.g. `"user,admin"`) |
-| `X-User-Groups` | JWT groups claim | Comma-separated list of group names |
-| `X-App-Shortcode` | Gateway config (`app.shortcode`) | The shortcode of the application deployment (e.g. `"books"`, `"myapp"`). Injected by the `InjectAppShortcodeHeader` gateway filter on every proxied request. |
+| Header | EPG filter | Presence | Value |
+|:---|:---|:---|:---|
+| `X-User-Id` | `InjectAuthContextHeaders` | Authenticated requests only | JWT `sub` claim — the caller's subject identifier |
+| `X-Request-Id` | `GenerateRequestId` | Always | Composite ID: `APP-{authParty}-{timestamp}-{random}` (useful for log correlation) |
+| `X-User-Roles` | `InjectAuthContextHeaders` | Authenticated, non-empty roles only | Comma-separated JWT `roles` claim (e.g. `"tarcinapp.admin,tarcinapp.editor"`) |
+| `X-User-Groups` | `InjectAuthContextHeaders` | Authenticated, non-empty groups only | Comma-separated JWT `groups` claim |
+| `X-App-Shortcode` | `application.yml` default-filter | Always | Application shortcode from `app.shortcode` config (e.g. `"books"`, `"myapp"`) |
+
+> **Absent vs. null:** `X-User-Id`, `X-User-Roles`, and `X-User-Groups` are not added to the request at all (rather than being set to an empty string) when auth is absent or disabled. `exchange.getIn().getHeader("X-User-Id", String.class)` returns `null` in that case — always null-check.
+>
+> **How they are injected:** `InjectAuthContextHeaders` runs after `AuthenticateRequest` and `GenerateRequestId` in every route. It reads the in-process `GatewaySecurityContext` (populated during JWT validation) and serializes it into outbound HTTP headers. EPG's own managed-field filters use `GatewaySecurityContext` directly and are unaffected by these headers.
 
 **`X-App-Shortcode` — intended uses in processors:**
 

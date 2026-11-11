@@ -231,53 +231,55 @@ The second request in each pair still reaches EPS's own uniqueness check as the 
 
 ### For record-limit rules
 
-Given a record-limit rule:
+EPC **never acquires a lock for a record-limit rule unless `enforceSerialisation: true` is explicitly set** on that rule, regardless of whether the scope contains interpolatable `${…}` fields.
+
+**Why the flag is always required:** A limit scope like `where[_kind]=${_kind}&set[actives]` has a `${_kind}` placeholder, but the resulting lock key (`...:book`) is the same for every user creating a book. Acquiring that lock unconditionally serialises all book creates globally — unacceptable in a multi-tenant system. The operator must opt in to any serialisation deliberately.
+
+**`enforceSerialisation` is defined on the EPS `RecordLimit` schema** and preserved through to `/system-info`. EPS itself never acts on it — it is a passthrough field meaningful only to EPC. See `10_COMPONENT_entity-persistence-service.md §Record Limits` for the full schema and examples.
+
+When `enforceSerialisation: true`, EPC builds the lock key from all `${…}` interpolatable dimensions in the scope:
 
 ```json
-{"scope": "where[_ownerUsers]=${_ownerUsers}&where[_kind]=book", "limit": 10}
+{"scope": "where[_kind]=${_kind}&set[owners][userIds]=${_ownerUsers}", "limit": 10, "enforceSerialisation": true}
+```
+```
+BOOKS:epc:lock:limit:entity:{scopeHash}:book:user-123
 ```
 
-EPC extracts the interpolatable dimensions (`_ownerUsers`) and constructs:
-
-```
-{appShortcode}:epc:lock:limit:entity:{scope-hash}:{_ownerUsers[0]}
-e.g.  BOOKS:epc:lock:limit:entity:a3f9c2:user-123
-```
-
-### Wide-scope and global limits
-
-For limit rules whose scope contains **no interpolatable fields** (e.g. `""` — global cap, or `where[_kind]=book` — kind-wide cap), the lock key would be identical for every create request regardless of who makes it. Acquiring that lock serialises the entire collection globally — unacceptable by default in a multi-tenant environment under normal throughput, but entirely correct and desirable for certain use cases such as hard licence-seat caps.
-
-**EPC behaviour is opt-in, controlled by `enforceSerialisation` on the limit rule.**
+When the scope has no interpolatable fields, the lock key is derived from the static scope content:
 
 ```json
 {"scope": "",                  "limit": 10,  "enforceSerialisation": true}
 {"scope": "where[_kind]=book", "limit": 500, "enforceSerialisation": true}
-{"scope": "",                  "limit": 500}
 ```
-
-When `enforceSerialisation: true`, EPC acquires a lock keyed on the fully resolved (non-interpolated) scope string:
-
 ```
 BOOKS:epc:lock:limit:entity:global          (scope: "")
 BOOKS:epc:lock:limit:entity:kind:book       (scope: "where[_kind]=book")
 ```
 
-When `enforceSerialisation` is absent or `false` (the default), wide-scope rules remain best-effort — no lock is acquired and EPS's own count check is the sole gate.
+When `enforceSerialisation` is absent or `false` (the default), no lock is acquired — EPS's own count check is the sole gate (best-effort).
 
-**`enforceSerialisation` is defined on the EPS `RecordLimit` schema** and preserved through to `/system-info`. EPS itself never acts on it — it is a passthrough field meaningful only to EPC. See `10_COMPONENT_entity-persistence-service.md §Record Limits` for the full schema and examples.
+**Important:** `set[actives]`, `set[publics]`, and similar time/visibility predicates in the scope string contribute nothing to the lock key. They are EPS-side counting filters only. The lock key is built solely from `${…}` placeholder values. When these predicates are part of the scope, the lock granularity is determined entirely by the remaining interpolatable dimensions:
+
+```
+where[_kind]=${_kind}&set[actives]&set[owners][userIds]=${_ownerUsers}
+→ lock key: ...:book:user-123   (per-user, per-kind — correct)
+
+where[_kind]=${_kind}&set[actives]
+→ lock key: ...:book            (all users for that kind — intentionally coarse)
+```
 
 **Choosing when to set `enforceSerialisation: true`:**
 
 | Scenario | Recommendation |
 |:---|:---|
-| Hard licence/seat cap (e.g. max 10 total records) | `true` — correctness over throughput |
+| Hard licence/seat cap (e.g. max 10 total records globally) | `true` — correctness over throughput |
 | Hard per-kind cap at low volume (e.g. max 5 featured articles) | `true` — low contention, safe to serialise |
+| Per-user/per-kind cap (e.g. max 10 books per user) | `true` with `${_ownerUsers}` in scope — serialises per-user only |
 | Soft global rate limit (e.g. max 2 creates/minute) | `false` — occasional overshoot is acceptable |
 | High-volume kind cap (e.g. max 500,000 books) | `false` — global serialisation would bottleneck the system |
-| Per-user/per-kind cap with interpolatable scope | N/A — always locked per the interpolated dimensions, no flag needed |
 
-The practical overshoot when `enforceSerialisation: false` for a global limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable.
+The practical overshoot when `enforceSerialisation: false` for a limit of N with C concurrent writers is at most C − 1 extra records. For soft quotas this is acceptable.
 
 ### Lock key source for PATCH requests
 
